@@ -1,7 +1,9 @@
 package com.lidesheng.hyperlyric.ui.page
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,19 +34,19 @@ import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
 import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowDropdownPreference
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveOverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private fun setExcludeFromRecents(context: Context, exclude: Boolean) {
@@ -63,6 +65,7 @@ fun SettingsPage() {
     val blurActive = backdrop != null
     val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
     val topAppBarScrollBehavior = MiuixScrollBehavior()
+    val lazyListState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val backupRestoreHelper =
         com.lidesheng.hyperlyric.utils.rememberBackupRestoreHelper(snackbarHostState)
@@ -71,12 +74,13 @@ fun SettingsPage() {
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(R.string.title_settings_page),
                     scrollBehavior = topAppBarScrollBehavior,
+                    isContentScrolled = lazyListState.canScrollBackward,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(R.string.back)
@@ -87,12 +91,9 @@ fun SettingsPage() {
             }
         }
     ) { innerPadding ->
-        val lazyListState = rememberLazyListState()
         val top = innerPadding.calculateTopPadding()
         val bottom = innerPadding.calculateBottomPadding()
-        val contentPadding = remember(top, bottom) {
-            PaddingValues(top = top, start = 0.dp, end = 0.dp, bottom = bottom + 16.dp)
-        }
+        val contentPadding = pageContentPadding(innerPadding, extraBottom = 16.dp)
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             LazyColumn(
                 state = lazyListState,
@@ -144,6 +145,12 @@ private fun LazyListScope.settingsSections(
                 )
             )
         }
+        val uiStyle = com.lidesheng.hyperlyric.ui.utils.LocalUiStyle.current
+        val uiStyleOptions = listOf(
+            stringResource(R.string.ui_style_follow_system),
+            stringResource(R.string.ui_style_os3),
+            stringResource(R.string.ui_style_os4),
+        )
         val languageOptions = listOf(
             stringResource(R.string.language_system),
             stringResource(R.string.language_simplified_chinese),
@@ -158,24 +165,30 @@ private fun LazyListScope.settingsSections(
                 .fillMaxWidth()
         ) {
             Column {
-                WindowDropdownPreference(
+                AdaptiveOverlayDropdownPreference(
                     title = stringResource(R.string.title_theme),
                     items = themeOptions,
                     selectedIndex = themeMode,
                     onSelectedIndexChange = {
                         themeMode = it; prefs.edit { putInt(UIConstants.KEY_THEME_MODE, it) }
                     })
-                WindowDropdownPreference(
+                AdaptiveOverlayDropdownPreference(
                     title = stringResource(R.string.title_app_language),
                     items = languageOptions,
                     selectedIndex = appLanguage,
                     onSelectedIndexChange = {
-                        if (appLanguage == it) return@WindowDropdownPreference
+                        if (appLanguage == it) return@AdaptiveOverlayDropdownPreference
                         appLanguage = it
                         prefs.edit { putInt(UIConstants.KEY_APP_LANGUAGE, it) }
                     }
                 )
-                if (themeMode >= 3) {
+                AdaptiveOverlayDropdownPreference(
+                    title = stringResource(R.string.title_ui_style),
+                    items = uiStyleOptions,
+                    selectedIndex = uiStyle,
+                    onSelectedIndexChange = { prefs.edit { putInt(UIConstants.KEY_UI_STYLE, it) } },
+                )
+                AnimatedVisibility(visible = themeMode >= 3) {
                     var monetColorIndex by remember {
                         mutableIntStateOf(
                             prefs.getInt(
@@ -194,7 +207,7 @@ private fun LazyListScope.settingsSections(
                         stringResource(R.string.monet_purple),
                         stringResource(R.string.monet_pink)
                     )
-                    WindowDropdownPreference(
+                    AdaptiveOverlayDropdownPreference(
                         title = stringResource(R.string.title_monet),
                         items = monetOptions,
                         selectedIndex = monetColorIndex,
@@ -384,7 +397,7 @@ private fun LazyListScope.settingsSections(
                 .fillMaxWidth()
         ) {
             Column {
-                WindowDropdownPreference(
+                AdaptiveOverlayDropdownPreference(
                     title = stringResource(R.string.title_log_level),
                     items = logLevelOptions,
                     selectedIndex = logLevel,

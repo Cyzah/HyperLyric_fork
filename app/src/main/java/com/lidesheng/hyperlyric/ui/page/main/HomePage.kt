@@ -15,10 +15,10 @@ import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
 import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Refresh
@@ -49,12 +49,12 @@ fun HomePage(
     Scaffold(
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = "HyperLyric",
                     scrollBehavior = topAppBarScrollBehavior,
                     actions = {
-                        IconButton(onClick = onRestartClick) {
+                        AdaptiveIconButton(onClick = onRestartClick) {
                             Icon(
                                 imageVector = MiuixIcons.Refresh,
                                 contentDescription = stringResource(id = R.string.dialog_restart_title)
@@ -68,7 +68,6 @@ fun HomePage(
         val contentPadding = pageContentPadding(
             innerPadding = innerPadding,
             outerPadding = outerPadding,
-            isWideScreen = false,
             extraStart = 0.dp,
             extraEnd = 0.dp,
         )

@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page.hooksettings.media.island
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,15 +41,15 @@ import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
 import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.TabRow
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTabRow
 import top.yukonga.miuix.kmp.basic.TabRowDefaults
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -284,12 +285,13 @@ fun IslandExpandedMediaCardPage() {
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(id = R.string.title_super_island),
                     scrollBehavior = topAppBarScrollBehavior,
+                    isContentScrolled = (when (pagerState.currentPage) { 0 -> backgroundListState; 1 -> elementListState; else -> layoutListState }).canScrollBackward,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(id = R.string.back)
@@ -297,7 +299,7 @@ fun IslandExpandedMediaCardPage() {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showRestartDialog = true }) {
+                        AdaptiveIconButton(onClick = { showRestartDialog = true }) {
                             Icon(
                                 imageVector = MiuixIcons.Refresh,
                                 contentDescription = stringResource(id = R.string.dialog_restart_title)
@@ -344,7 +346,7 @@ fun IslandExpandedMediaCardPage() {
                                             RootConstants.ISLAND_EXPANDED_MEDIA_THUMB_STYLE_HIDDEN
                                 )
                             }
-                            TabRow(
+                            AdaptiveTabRow(
                                 tabs = tabs,
                                 selectedTabIndex = pagerState.currentPage,
                                 onTabSelected = { index ->
@@ -375,14 +377,7 @@ fun IslandExpandedMediaCardPage() {
                 }
                 val topPadding = innerPadding.calculateTopPadding()
                 val bottomPadding = innerPadding.calculateBottomPadding()
-                val contentPadding = remember(topPadding, bottomPadding) {
-                    PaddingValues(
-                        top = topPadding,
-                        start = 0.dp,
-                        end = 0.dp,
-                        bottom = bottomPadding + 16.dp
-                    )
-                }
+                val contentPadding = pageContentPadding(innerPadding, extraBottom = 16.dp)
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.pageScrollModifiers(

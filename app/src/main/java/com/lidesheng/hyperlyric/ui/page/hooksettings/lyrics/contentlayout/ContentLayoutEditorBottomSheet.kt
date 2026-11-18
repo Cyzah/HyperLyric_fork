@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +31,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveBottomSheet
 
 @Composable
 internal fun ContentLayoutEditorBottomSheet(
@@ -40,16 +41,22 @@ internal fun ContentLayoutEditorBottomSheet(
     availableFields: List<ContentLayoutField>,
     requireSelection: Boolean,
     onDismiss: () -> Unit,
+    onDismissFinished: () -> Unit,
     onConfirm: (List<ContentLayoutField>) -> Unit
 ) {
-    if (!show) return
 
     val initialOrder = remember(currentFields, availableFields) {
         currentFields + availableFields.filterNot { it in currentFields }
     }
-    var draftOrder by remember(initialOrder) { mutableStateOf(initialOrder) }
-    var draftSelection by remember(initialOrder) {
+    var draftOrder by remember { mutableStateOf(initialOrder) }
+    var draftSelection by remember {
         mutableStateOf(currentFields.map { it.key }.toSet())
+    }
+    LaunchedEffect(show) {
+        if (show) {
+            draftOrder = initialOrder
+            draftSelection = currentFields.map { it.key }.toSet()
+        }
     }
     val checkboxItems = draftOrder.map { field ->
         ReorderableCheckboxItem(
@@ -67,8 +74,8 @@ internal fun ContentLayoutEditorBottomSheet(
     val maxSheetHeight = (windowHeight - safeTopInset).coerceAtLeast(0.dp)
     val maxListHeight = (maxSheetHeight - 122.dp).coerceAtLeast(0.dp)
 
-    WindowBottomSheet(
-        show = true,
+    AdaptiveBottomSheet(
+        show = show,
         modifier = Modifier.heightIn(max = maxSheetHeight),
         title = title,
         backgroundColor = MiuixTheme.colorScheme.surface,
@@ -99,7 +106,8 @@ internal fun ContentLayoutEditorBottomSheet(
                 )
             }
         },
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
+        onDismissFinished = onDismissFinished
     ) {
         Box(
             modifier = Modifier

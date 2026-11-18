@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page.hooksettings.media.controlcenter
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,15 +25,15 @@ import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
 import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveOverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -76,12 +77,12 @@ fun ControlCenterMediaCardPage() {
     Scaffold(
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(id = R.string.title_control_center),
                     scrollBehavior = topAppBarScrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(id = R.string.back)
@@ -94,12 +95,7 @@ fun ControlCenterMediaCardPage() {
     ) { padding ->
         val topPadding = padding.calculateTopPadding()
         val bottomPadding = padding.calculateBottomPadding()
-        val contentPadding = remember(topPadding, bottomPadding) {
-            PaddingValues(
-                top = topPadding,
-                bottom = bottomPadding + 16.dp
-            )
-        }
+        val contentPadding = pageContentPadding(padding, extraBottom = 16.dp)
         val lazyListState = rememberLazyListState()
 
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
@@ -119,7 +115,7 @@ fun ControlCenterMediaCardPage() {
                             .padding(bottom = 12.dp)
                             .fillMaxWidth()
                     ) {
-                        OverlayDropdownPreference(
+                        AdaptiveOverlayDropdownPreference(
                             title = stringResource(R.string.title_media_cover_flip_animation),
                             items = listOf(
                                 stringResource(R.string.monet_default),

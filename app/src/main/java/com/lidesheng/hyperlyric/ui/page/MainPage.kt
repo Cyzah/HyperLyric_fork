@@ -4,7 +4,6 @@ package com.lidesheng.hyperlyric.ui.page
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -13,20 +12,30 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -38,9 +47,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalDensity
+import top.yukonga.miuix.kmp.material.GlassShadows
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -71,6 +82,11 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.glass.GlassNavigationBar
+import top.yukonga.miuix.kmp.glass.GlassNavigationBarDefaults
+import top.yukonga.miuix.kmp.glass.GlassNavigationItem
+import com.lidesheng.hyperlyric.ui.utils.LocalGlassStyle
+import com.lidesheng.hyperlyric.ui.utils.rememberAdaptiveBottomBarBandBrush
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.FloatingToolbarDefaults
@@ -87,7 +103,13 @@ import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.blur.ProgressiveBlur
+import top.yukonga.miuix.kmp.blur.progressiveTextureBlur
+import top.yukonga.miuix.kmp.glass.GlassTopAppBarDefaults
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import androidx.compose.ui.graphics.RectangleShape
+import top.yukonga.miuix.kmp.material.EdgeStrokes
+import top.yukonga.miuix.kmp.material.edgeStroke
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -95,12 +117,12 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.interfaces.ExperimentalScrollBarApi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.lidesheng.hyperlyric.ui.component.AdaptiveDialog
 
 @Composable
 fun MainPage() {
     val context = LocalContext.current
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isWideScreen = com.lidesheng.hyperlyric.ui.utils.isWideAppWindow()
     val navigationRailState = rememberNavigationRailState()
     val navigator = LocalNavigator.current
     val scope = rememberCoroutineScope()
@@ -224,6 +246,7 @@ fun MainPage() {
             emptyList()
         )
     }
+    var showMigrationDialog by remember { mutableStateOf(false) }
     val migrationTitle = stringResource(R.string.migration_dialog_title)
     LaunchedEffect(Unit) {
         try {
@@ -235,6 +258,7 @@ fun MainPage() {
                     MigrationData.notes.filter { it.versionCode.toLong() == currentVersion }
                 if (matched.isNotEmpty()) {
                     migrationNotes = matched
+                    showMigrationDialog = true
                 }
             }
         } catch (_: Exception) {
@@ -268,6 +292,10 @@ fun MainPage() {
 
     // --- outer backdrop (bottom bar blur) ---
     val outerBackdrop = rememberBlurBackdrop()
+    val glassStyle = LocalGlassStyle.current
+    val glassNavItems = remember(navItems) {
+        navItems.map { GlassNavigationItem(icon = it.icon, label = it.label, contentDescription = it.label) }
+    }
     val outerBlurActive = outerBackdrop != null
     val outerBarColor = if (outerBlurActive) Color.Transparent else MiuixTheme.colorScheme.surface
 
@@ -294,11 +322,11 @@ fun MainPage() {
     // --- migration dialog ---
     val migrationSnackbarHostState = remember { SnackbarHostState() }
     val onOpenMigrationLink = rememberExternalLinkOpener(migrationSnackbarHostState)
-    if (migrationNotes.isNotEmpty()) {
-        WindowDialog(
+    AdaptiveDialog(
             title = migrationTitle,
-            show = migrationNotes.isNotEmpty(),
-            onDismissRequest = {}
+            show = showMigrationDialog,
+            onDismissRequest = {},
+            onDismissFinished = { if (!showMigrationDialog) migrationNotes = emptyList() },
         ) {
             Box {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -327,7 +355,7 @@ fun MainPage() {
                             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
                             val currentVersion = PackageInfoCompat.getLongVersionCode(pInfo)
                             prefs.edit { putLong(UIConstants.KEY_LAST_SEEN_VERSION, currentVersion) }
-                            migrationNotes = emptyList()
+                            showMigrationDialog = false
                         }
                     )
                 }
@@ -337,14 +365,59 @@ fun MainPage() {
                 )
             }
         }
-    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
+            val navigationBarInset = with(LocalDensity.current) { WindowInsets.navigationBars.getBottom(this).toDp() }
+            val bottomBarMargin = maxOf(20.dp, navigationBarInset + 4.dp)
+            val surfaceColor = MiuixTheme.colorScheme.surface
+            val gradientBrush = rememberAdaptiveBottomBarBandBrush()
+            val totalMaskHeight = GlassNavigationBarDefaults.Height + bottomBarMargin
             AnimatedVisibility(
-                visible = !isLandscape && !floatingNavBarEnabled,
+                visible = !isWideScreen && glassStyle,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(totalMaskHeight)
+                        .then(
+                            if (isRuntimeShaderSupported() && outerBackdrop != null) {
+                                Modifier.progressiveTextureBlur(
+                                    backdrop = outerBackdrop,
+                                    shape = RectangleShape,
+                                    blurRadius = GlassTopAppBarDefaults.ProgressiveBlurRadius.value,
+                                    gradient = ProgressiveBlur.Bottom.copy(curve = 0.5f),
+                                    colors = BlurColors(
+                                        blendColors = listOf(
+                                            BlendColorEntry(color = surfaceColor.copy(alpha = 0.8f))
+                                        )
+                                    ),
+                                )
+                            } else {
+                                Modifier.background(gradientBrush)
+                            }
+                        )
+                        .padding(bottom = bottomBarMargin),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    GlassNavigationBar(
+                        items = glassNavItems,
+                        modifier = Modifier
+                            .padding(horizontal = 24.dp)
+                            .widthIn(max = GlassNavigationBarDefaults.ContentPaddingHorizontal * 2 + 80.dp * glassNavItems.size),
+                        selectedIndex = mainPagerState.selectedPage,
+                        onSelect = { mainPagerState.animateToPage(it) },
+                        backdrop = outerBackdrop,
+                        defaultWindowInsetsPadding = false,
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = !isWideScreen && !glassStyle && !floatingNavBarEnabled,
                 enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
                 exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
             ) {
@@ -387,16 +460,16 @@ fun MainPage() {
                 }
             }
             AnimatedVisibility(
-                visible = !isLandscape && floatingNavBarEnabled,
+                visible = !isWideScreen && !glassStyle && floatingNavBarEnabled,
                 enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
                 exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
             ) {
                 val floatingBarColor =
                     if (outerBlurActive) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
                 val floatingBarShape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius)
-                val isDark = isSystemInDarkTheme()
+                val isDark = com.lidesheng.hyperlyric.ui.utils.LocalAppDarkTheme.current
                 val floatingHighlight = remember(isDark) {
-                    if (isDark) Highlight.GlassStrokeSmallDark else Highlight.GlassStrokeSmallLight
+                    if (isDark) EdgeStrokes.MiddleDark else EdgeStrokes.MiddleLight
                 }
                 FloatingNavigationBar(
                     modifier = (if (outerBlurActive) {
@@ -414,8 +487,7 @@ fun MainPage() {
                                         ),
                                     ),
                                 ),
-                                highlight = floatingHighlight,
-                            )
+                            ).edgeStroke(shape = floatingBarShape, stroke = floatingHighlight)
                     } else {
                         Modifier
                     }).padding(horizontal = 12.dp),
@@ -437,7 +509,7 @@ fun MainPage() {
         }
     ) { innerPadding ->
         Row(Modifier.fillMaxSize()) {
-            if (isLandscape) {
+            if (isWideScreen) {
                 NavigationRail(state = navigationRailState) {
                     navItems.forEachIndexed { index, item ->
                         NavigationRailItem(
@@ -453,42 +525,47 @@ fun MainPage() {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
+                    .then(if (isWideScreen) Modifier.consumeWindowInsets(
+                        WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Start)
+                    ) else Modifier)
                     .then(if (outerBackdrop != null) Modifier.layerBackdrop(outerBackdrop) else Modifier)
             ) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize().imePadding(),
-                    beyondViewportPageCount = 1,
-                    verticalAlignment = Alignment.Top,
-                ) { page ->
-                    if (page == 0) {
-                        HomePage(
-                            outerPadding = innerPadding,
-                            quote = dateSpecificQuote ?: randomQuote,
-                            isDateSpecificQuote = dateSpecificQuote != null,
-                            hidePoetryCard = hideHomePoetryCard,
-                            onQuoteClick = { randomQuote = QuotesData.list.random() },
-                            onQuoteLongPress = { navigator.navigate(Route.Poetry) },
-                            onSuperIslandConfigClick = { navigator.navigate(Route.HookSettings) },
-                            onMediaCardConfigClick = { navigator.navigate(Route.MediaCardSettings) },
-                            onDynamicIslandConfigClick = { navigator.navigate(Route.DynamicIslandNotification) },
-                            onRestartClick = { showRestartDialog = true },
-                            removeFocusWhitelist = removeFocusWhitelist,
-                            onRemoveFocusWhitelistToggle = toggleRemoveFocusWhitelist,
-                            onAppSettingsClick = { navigator.navigate(Route.Settings) },
-                        )
-                    } else {
-                        AboutPage(
-                            outerPadding = innerPadding,
-                            aboutAppVersion = aboutAppVersion,
-                            aboutDeviceModel = aboutDeviceModel,
-                            aboutOsVersion = aboutOsVersion,
-                            aboutAndroidVersion = aboutAndroidVersion,
-                            onHelpClick = { navigator.navigate(Route.Help) },
-                            onLicensesClick = { navigator.navigate(Route.Licenses) },
-                            onChangelogClick = { navigator.navigate(Route.Changelog) },
-                            onContributorsClick = { navigator.navigate(Route.Contributors) },
-                        )
+                CompositionLocalProvider(com.lidesheng.hyperlyric.ui.utils.LocalPageStartReserved provides isWideScreen) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize().imePadding(),
+                        beyondViewportPageCount = 1,
+                        verticalAlignment = Alignment.Top,
+                    ) { page ->
+                        if (page == 0) {
+                            HomePage(
+                                outerPadding = innerPadding,
+                                quote = dateSpecificQuote ?: randomQuote,
+                                isDateSpecificQuote = dateSpecificQuote != null,
+                                hidePoetryCard = hideHomePoetryCard,
+                                onQuoteClick = { randomQuote = QuotesData.list.random() },
+                                onQuoteLongPress = { navigator.navigate(Route.Poetry) },
+                                onSuperIslandConfigClick = { navigator.navigate(Route.HookSettings) },
+                                onMediaCardConfigClick = { navigator.navigate(Route.MediaCardSettings) },
+                                onDynamicIslandConfigClick = { navigator.navigate(Route.DynamicIslandNotification) },
+                                onRestartClick = { showRestartDialog = true },
+                                removeFocusWhitelist = removeFocusWhitelist,
+                                onRemoveFocusWhitelistToggle = toggleRemoveFocusWhitelist,
+                                onAppSettingsClick = { navigator.navigate(Route.Settings) },
+                            )
+                        } else {
+                            AboutPage(
+                                outerPadding = innerPadding,
+                                aboutAppVersion = aboutAppVersion,
+                                aboutDeviceModel = aboutDeviceModel,
+                                aboutOsVersion = aboutOsVersion,
+                                aboutAndroidVersion = aboutAndroidVersion,
+                                onHelpClick = { navigator.navigate(Route.Help) },
+                                onLicensesClick = { navigator.navigate(Route.Licenses) },
+                                onChangelogClick = { navigator.navigate(Route.Changelog) },
+                                onContributorsClick = { navigator.navigate(Route.Contributors) },
+                            )
+                        }
                     }
                 }
             }

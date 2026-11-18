@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Box
@@ -37,7 +38,7 @@ import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
@@ -45,12 +46,12 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveOverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -145,12 +146,12 @@ fun HookSettingsPage() {
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(R.string.title_lyric_settings),
                     scrollBehavior = topAppBarScrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(R.string.back)
@@ -164,14 +165,7 @@ fun HookSettingsPage() {
         val lazyListState = rememberLazyListState()
         val top = innerPadding.calculateTopPadding()
         val bottom = innerPadding.calculateBottomPadding()
-        val contentPadding = remember(top, bottom) {
-            PaddingValues(
-                top = top,
-                start = 0.dp,
-                end = 0.dp,
-                bottom = bottom + 16.dp
-            )
-        }
+        val contentPadding = pageContentPadding(innerPadding, extraBottom = 16.dp)
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             LazyColumn(
                 state = lazyListState,
@@ -236,7 +230,7 @@ private fun LazyListScope.hookSettingsSections(
                     checked = hookEnabled,
                     onCheckedChange = onHookEnabledChange,
                 )
-                OverlayDropdownPreference(
+                AdaptiveOverlayDropdownPreference(
                     title = stringResource(R.string.title_lyric_type),
                     items = listOf(
                         stringResource(R.string.option_lyric_type_super_island),

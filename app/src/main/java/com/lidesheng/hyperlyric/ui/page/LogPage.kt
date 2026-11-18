@@ -2,12 +2,14 @@
 
 package com.lidesheng.hyperlyric.ui.page
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
@@ -39,6 +41,13 @@ import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorContent
+import com.lidesheng.hyperlyric.ui.utils.LocalGlassStyle
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ListPopupDefaults
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -47,16 +56,16 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.TabRow
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTabRow
 import top.yukonga.miuix.kmp.basic.TabRowDefaults
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.interfaces.ExperimentalScrollBarApi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowCascadingListPopup
+import top.yukonga.miuix.kmp.overlay.OverlayCascadingListPopup
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -75,6 +84,8 @@ fun LogPage() {
         listOf(stringResource(R.string.title_app_logs), stringResource(R.string.title_module_logs))
     val pagerState = rememberPagerState { tabs.size }
     val isAppTab = pagerState.currentPage == 0
+    val appListState = rememberLazyListState()
+    val moduleListState = rememberLazyListState()
 
     // 应用日志状态
     val appLogs = remember { mutableStateListOf<LogEntry>() }
@@ -89,6 +100,9 @@ fun LogPage() {
     var moduleSelectedLevel by remember { mutableStateOf("ALL") }
 
     var showMorePopup by remember { mutableStateOf(false) }
+    val moreMenuAnchor = rememberGlassPopupAnchor()
+    val glassStyle = LocalGlassStyle.current
+    var holdMorePopup by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
 
     val copiedMsg = stringResource(R.string.copied)
@@ -259,16 +273,18 @@ fun LogPage() {
         )
     }
 
+    Box {
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(R.string.title_view_logs),
                     scrollBehavior = topAppBarScrollBehavior,
+                    isContentScrolled = (if (isAppTab) appListState else moduleListState).canScrollBackward,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(R.string.back)
@@ -277,28 +293,37 @@ fun LogPage() {
                     },
                     actions = {
                         Box {
-                            IconButton(
-                                onClick = { showMorePopup = true },
-                                holdDownState = showMorePopup
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.More,
-                                    contentDescription = stringResource(R.string.more)
+                            if (glassStyle) {
+                                GlassIconButton(
+                                    onClick = { showMorePopup = true },
+                                    modifier = Modifier.glassPopupAnchor(moreMenuAnchor, 20.dp),
+                                    backdrop = backdrop,
+                                ) {
+                                    Icon(imageVector = MiuixIcons.More,
+                                        contentDescription = stringResource(R.string.more),
+                                        modifier = Modifier.glassPopupAnchorContent(moreMenuAnchor))
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = { holdMorePopup = true; showMorePopup = true },
+                                    holdDownState = holdMorePopup,
+                                ) {
+                                    Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more))
+                                }
+                                OverlayCascadingListPopup(
+                                    show = showMorePopup, entries = logEntries,
+                                    alignment = PopupPositionProvider.Align.TopEnd,
+                                    popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
+                                    onDismissRequest = { showMorePopup = false },
+                                    onDismissFinished = { if (!showMorePopup) holdMorePopup = false },
                                 )
                             }
-                            WindowCascadingListPopup(
-                                show = showMorePopup,
-                                entries = logEntries,
-                                alignment = PopupPositionProvider.Align.TopEnd,
-                                popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
-                                onDismissRequest = { showMorePopup = false }
-                            )
                         }
                     },
                     bottomContent = {
-                        TabRow(
+                        AdaptiveTabRow(
                             tabs = tabs,
-                            selectedTabIndex = pagerState.currentPage,
+                            selectedTabIndex = pagerState.targetPage,
                             onTabSelected = { index ->
                                 coroutineScope.launch { pagerState.animateScrollToPage(index) }
                             },
@@ -325,9 +350,7 @@ fun LogPage() {
                 val currentHasLoaded = if (isApp) appHasLoaded else moduleHasLoaded
                 val top = padding.calculateTopPadding()
                 val bottom = padding.calculateBottomPadding()
-                val contentPadding = remember(top, bottom) {
-                    PaddingValues(top = top, bottom = bottom + 16.dp)
-                }
+                val contentPadding = pageContentPadding(padding, extraBottom = 16.dp)
 
                 LogTabContent(
                     logs = currentLogs,
@@ -335,12 +358,25 @@ fun LogPage() {
                     isRefreshing = currentLoading && currentHasLoaded,
                     onRefresh = { if (isApp) reloadAppLogs() else reloadModuleLogs() },
                     topAppBarScrollBehavior = topAppBarScrollBehavior,
+                    lazyListState = if (isApp) appListState else moduleListState,
                     contentPadding = contentPadding,
                     copiedMsg = copiedMsg,
                     snackbarHostState = snackbarHostState
                 )
             }
         }
+    }
+
+    if (glassStyle) {
+        GlassIconDropdownMenu(
+            show = showMorePopup,
+            onDismissRequest = { showMorePopup = false },
+            anchor = moreMenuAnchor,
+            anchorContent = { Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more)) },
+            entries = logEntries,
+            backdrop = backdrop,
+        )
+    }
     }
 
     SimpleDialog(

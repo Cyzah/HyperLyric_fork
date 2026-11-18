@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page.hooksettings
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,14 +33,14 @@ import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
 import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveOverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.RadioButtonPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -84,12 +85,12 @@ fun LyricAnimationPage() {
     Scaffold(
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(id = R.string.title_lyric_anim),
                     scrollBehavior = topAppBarScrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(id = R.string.back)
@@ -103,14 +104,7 @@ fun LyricAnimationPage() {
         val lazyListState = rememberLazyListState()
         val top = innerPadding.calculateTopPadding()
         val bottom = innerPadding.calculateBottomPadding()
-        val contentPadding = remember(top, bottom) {
-            PaddingValues(
-                top = top,
-                start = 0.dp,
-                end = 0.dp,
-                bottom = bottom
-            )
-        }
+        val contentPadding = pageContentPadding(innerPadding, extraBottom = 0.dp)
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             LazyColumn(
                 state = lazyListState,
@@ -152,7 +146,7 @@ private fun LazyListScope.animationPageSections() {
                 .padding(bottom = 12.dp)
                 .fillMaxWidth()
         ) {
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(id = R.string.title_anim_speed),
                 items = animSpeedOptions,
                 selectedIndex = RootConstants.HOOK_ANIM_SPEED_RATES.indexOf(animSpeedRate),

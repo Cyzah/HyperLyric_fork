@@ -35,7 +35,8 @@ import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.lidesheng.hyperlyric.ui.component.AdaptiveDialog
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 
 @Composable
 internal fun AmllTtmlCachePage() {
@@ -145,22 +146,20 @@ internal fun AmllTtmlCachePage() {
         }
     }
 
-    if (showClearAllDialog) {
-        WindowDialog(
-            title = clearAllText,
-            show = true,
-            onDismissRequest = { showClearAllDialog = false }
-        ) {
-            CacheConfirmContent(
-                message = stringResource(
-                    R.string.dialog_lyric_enhancement_cache_clear_all_summary
-                ),
-                confirmText = stringResource(R.string.confirm),
-                cancelText = stringResource(R.string.cancel),
-                onConfirm = ::clearAll,
-                onDismiss = { showClearAllDialog = false }
-            )
-        }
+    AdaptiveDialog(
+        title = clearAllText,
+        show = showClearAllDialog,
+        onDismissRequest = { showClearAllDialog = false }
+    ) {
+        CacheConfirmContent(
+            message = stringResource(
+                R.string.dialog_lyric_enhancement_cache_clear_all_summary
+            ),
+            confirmText = stringResource(R.string.confirm),
+            cancelText = stringResource(R.string.cancel),
+            onConfirm = ::clearAll,
+            onDismiss = { showClearAllDialog = false }
+        )
     }
 
     XposedLyricSettingPage(
@@ -170,7 +169,7 @@ internal fun AmllTtmlCachePage() {
         isRefreshing = isRefreshing,
         onRefresh = { loadEntries(refresh = true) },
         topBarActions = {
-            IconButton(
+            AdaptiveIconButton(
                 onClick = { showClearAllDialog = true },
                 enabled = !busy
             ) {

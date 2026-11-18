@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page.lyricenhancement
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +38,7 @@ import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
@@ -45,13 +46,13 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.lidesheng.hyperlyric.ui.component.AdaptiveDialog
 import java.text.DateFormat
 import java.util.Date
 
@@ -100,23 +101,21 @@ internal fun AmllTtmlCacheDetailPage(route: Route.AmllTtmlCacheDetail) {
         }
     }
 
-    if (showDeleteDialog) {
-        WindowDialog(
-            title = deleteText,
-            show = true,
-            onDismissRequest = { showDeleteDialog = false }
-        ) {
-            CacheConfirmContent(
-                message = stringResource(
-                    R.string.dialog_lyric_enhancement_cache_clear_entry_summary,
-                    route.title
-                ),
-                confirmText = stringResource(R.string.confirm),
-                cancelText = stringResource(R.string.cancel),
-                onConfirm = ::runDeleteEntry,
-                onDismiss = { showDeleteDialog = false }
-            )
-        }
+    AdaptiveDialog(
+        title = deleteText,
+        show = showDeleteDialog,
+        onDismissRequest = { showDeleteDialog = false }
+    ) {
+        CacheConfirmContent(
+            message = stringResource(
+                R.string.dialog_lyric_enhancement_cache_clear_entry_summary,
+                route.title
+            ),
+            confirmText = stringResource(R.string.confirm),
+            cancelText = stringResource(R.string.cancel),
+            onConfirm = ::runDeleteEntry,
+            onDismiss = { showDeleteDialog = false }
+        )
     }
 
     val backdrop = rememberBlurBackdrop()
@@ -127,14 +126,14 @@ internal fun AmllTtmlCacheDetailPage(route: Route.AmllTtmlCacheDetail) {
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = route.title.ifBlank {
                         stringResource(R.string.title_amll_ttml_cache_detail)
                     },
                     scrollBehavior = topAppBarScrollBehavior,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(R.string.back)
@@ -142,7 +141,7 @@ internal fun AmllTtmlCacheDetailPage(route: Route.AmllTtmlCacheDetail) {
                         }
                     },
                     actions = {
-                        IconButton(
+                        AdaptiveIconButton(
                             onClick = { showDeleteDialog = true },
                             enabled = !requestInFlight
                         ) {
@@ -156,10 +155,7 @@ internal fun AmllTtmlCacheDetailPage(route: Route.AmllTtmlCacheDetail) {
             }
         }
     ) { innerPadding ->
-        val contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding(),
-            bottom = innerPadding.calculateBottomPadding() + 16.dp
-        )
+        val contentPadding = pageContentPadding(innerPadding, extraBottom = 16.dp)
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             LazyColumn(
                 modifier = Modifier.pageScrollModifiers(

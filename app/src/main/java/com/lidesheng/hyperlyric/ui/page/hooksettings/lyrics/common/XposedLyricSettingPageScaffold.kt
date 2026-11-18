@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page.hooksettings.lyrics.common
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Box
@@ -29,7 +30,7 @@ import com.lidesheng.hyperlyric.ui.utils.BlurredBar
 import com.lidesheng.hyperlyric.ui.utils.pageScrollModifiers
 import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
@@ -37,7 +38,7 @@ import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -98,6 +99,7 @@ internal fun XposedLyricSettingPage(
     val blurActive = backdrop != null
     val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
     val topAppBarScrollBehavior = MiuixScrollBehavior()
+    val lazyListState = rememberLazyListState()
 
     Scaffold(
         snackbarHost = {
@@ -105,12 +107,13 @@ internal fun XposedLyricSettingPage(
         },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = title,
                     scrollBehavior = topAppBarScrollBehavior,
+                    isContentScrolled = lazyListState.canScrollBackward,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(id = R.string.back)
@@ -125,15 +128,7 @@ internal fun XposedLyricSettingPage(
     ) { padding ->
         val topPadding = padding.calculateTopPadding()
         val bottomPadding = padding.calculateBottomPadding()
-        val contentPadding = remember(topPadding, bottomPadding) {
-            PaddingValues(
-                top = topPadding,
-                start = 0.dp,
-                end = 0.dp,
-                bottom = bottomPadding + 16.dp
-            )
-        }
-        val lazyListState = rememberLazyListState()
+        val contentPadding = pageContentPadding(padding, extraBottom = 16.dp)
         val pullToRefreshState = rememberPullToRefreshState()
         val contentReady = if (onRefresh != null) {
             rememberEntryTransitionContentReady()
@@ -178,26 +173,17 @@ internal fun XposedLyricSettingPage(
                         onRefresh = onRefresh,
                         pullToRefreshState = pullToRefreshState,
                         contentPadding = PaddingValues(top = topPadding),
-                        topAppBarScrollBehavior = topAppBarScrollBehavior,
                         refreshTexts = refreshTexts,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        val refreshContentPadding = remember(topPadding, bottomPadding) {
-                            PaddingValues(
-                                top = topPadding,
-                                start = 0.dp,
-                                end = 0.dp,
-                                bottom = bottomPadding
-                            )
-                        }
                         LazyColumn(
                             state = lazyListState,
                             modifier = Modifier.pageScrollModifiers(
                                 enableScrollEndHaptic = true,
-                                showTopAppBar = false,
+                                showTopAppBar = true,
                                 topAppBarScrollBehavior = topAppBarScrollBehavior
                             ),
-                            contentPadding = refreshContentPadding,
+                            contentPadding = contentPadding,
                             content = content
                         )
                     }

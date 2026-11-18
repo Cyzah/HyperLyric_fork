@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import com.lidesheng.hyperlyric.ui.utils.rememberExternalLinkOpener
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,15 +33,15 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.TabRow
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTabRow
 import top.yukonga.miuix.kmp.basic.TabRowDefaults
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -70,12 +71,13 @@ fun HelpPage() {
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(R.string.title_help),
                     scrollBehavior = topAppBarScrollBehavior,
+                    isContentScrolled = (if (pagerState.currentPage == 0) superIslandListState else dynamicIslandListState).canScrollBackward,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(R.string.back)
@@ -83,9 +85,9 @@ fun HelpPage() {
                         }
                     },
                     bottomContent = {
-                        TabRow(
+                        AdaptiveTabRow(
                             tabs = tabs,
-                            selectedTabIndex = pagerState.currentPage,
+                            selectedTabIndex = pagerState.targetPage,
                             onTabSelected = { index ->
                                 coroutineScope.launch { pagerState.animateScrollToPage(index) }
                             },
@@ -109,14 +111,7 @@ fun HelpPage() {
                 val listState = if (page == 0) superIslandListState else dynamicIslandListState
                 val topPadding = innerPadding.calculateTopPadding()
                 val bottomPadding = innerPadding.calculateBottomPadding()
-                val contentPadding = remember(topPadding, bottomPadding) {
-                    PaddingValues(
-                        top = topPadding,
-                        start = 0.dp,
-                        end = 0.dp,
-                        bottom = bottomPadding + 16.dp
-                    )
-                }
+                val contentPadding = pageContentPadding(innerPadding, extraBottom = 16.dp)
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.pageScrollModifiers(

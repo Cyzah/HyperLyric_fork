@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +20,10 @@ import com.lidesheng.hyperlyric.common.UIConstants
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
+
+val LocalAppDarkTheme = staticCompositionLocalOf { false }
+val LocalGlassStyle = staticCompositionLocalOf { false }
+val LocalUiStyle = staticCompositionLocalOf { UIConstants.DEFAULT_UI_STYLE }
 
 object ThemeUtils {
 
@@ -44,8 +50,21 @@ object ThemeUtils {
             )
         }
 
+        var uiStyle by remember {
+            mutableIntStateOf(prefs.getInt(UIConstants.KEY_UI_STYLE, UIConstants.DEFAULT_UI_STYLE))
+        }
+        val systemIsOs4 = remember {
+            val version = runCatching {
+                Runtime.getRuntime().exec("getprop ro.build.version.incremental")
+                    .inputStream.bufferedReader().use { it.readLine() }
+            }.getOrNull() ?: android.os.Build.DISPLAY
+            version.startsWith("OS4", ignoreCase = true)
+        }
         val listener = remember {
             SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+                if (key == UIConstants.KEY_UI_STYLE) {
+                    uiStyle = p.getInt(UIConstants.KEY_UI_STYLE, UIConstants.DEFAULT_UI_STYLE)
+                }
                 if (key == UIConstants.KEY_THEME_MODE) {
                     themeMode = p.getInt(UIConstants.KEY_THEME_MODE, UIConstants.DEFAULT_THEME_MODE)
                 }
@@ -114,7 +133,16 @@ object ThemeUtils {
         }
 
         MiuixTheme(controller = themeController) {
-            content()
+            val glassStyle = when (uiStyle) {
+                UIConstants.UI_STYLE_OS4 -> true
+                UIConstants.UI_STYLE_OS3 -> false
+                else -> systemIsOs4
+            }
+            CompositionLocalProvider(
+                LocalAppDarkTheme provides isDark,
+                LocalGlassStyle provides glassStyle,
+                LocalUiStyle provides uiStyle.coerceIn(UIConstants.UI_STYLE_FOLLOW_SYSTEM, UIConstants.UI_STYLE_OS4),
+            ) { content() }
         }
     }
 }

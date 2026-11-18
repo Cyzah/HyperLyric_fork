@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.ui.page
 
+import com.lidesheng.hyperlyric.ui.utils.pageContentPadding
 import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
@@ -58,15 +59,15 @@ import com.lidesheng.hyperlyric.ui.utils.rememberBlurBackdrop
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveIconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
-import top.yukonga.miuix.kmp.basic.TabRow
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTabRow
 import top.yukonga.miuix.kmp.basic.TabRowDefaults
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveTopAppBar
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -74,7 +75,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveBottomSheet
 
 @SuppressLint("BatteryLife")
 @Composable
@@ -184,7 +185,9 @@ fun DynamicIslandNotificationPage() {
     val whitelist = remember(whitelistSet) { whitelistSet.toList() }
 
     var showAddWhitelistDialog by remember { mutableStateOf(false) }
+    var holdAddWhitelistDialog by remember { mutableStateOf(false) }
     var showDeleteWhitelistDialog by remember { mutableStateOf(false) }
+    var holdDeleteWhitelistDialog by remember { mutableStateOf(false) }
     var tempWhitelistInput by remember { mutableStateOf("") }
     var packageToDelete by remember { mutableStateOf("") }
 
@@ -367,12 +370,13 @@ fun DynamicIslandNotificationPage() {
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             BlurredBar(backdrop, blurActive) {
-                TopAppBar(
+                AdaptiveTopAppBar(
                     color = barColor,
                     title = stringResource(R.string.title_dynamic_island_lyrics),
                     scrollBehavior = scrollBehavior,
+                    isContentScrolled = (if (pagerState.currentPage == 0) configLazyListState else whitelistLazyListState).canScrollBackward,
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+                        AdaptiveIconButton(onClick = { navigator.pop() }) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = stringResource(R.string.back)
@@ -380,9 +384,9 @@ fun DynamicIslandNotificationPage() {
                         }
                     },
                     bottomContent = {
-                        TabRow(
+                        AdaptiveTabRow(
                             tabs = tabs,
-                            selectedTabIndex = pagerState.currentPage,
+                            selectedTabIndex = pagerState.targetPage,
                             onTabSelected = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(
@@ -403,14 +407,7 @@ fun DynamicIslandNotificationPage() {
     ) { padding ->
         val topPadding = padding.calculateTopPadding()
         val bottomPadding = padding.calculateBottomPadding()
-        val contentPadding = remember(topPadding, bottomPadding) {
-            PaddingValues(
-                top = topPadding,
-                start = 0.dp,
-                end = 0.dp,
-                bottom = bottomPadding + 16.dp
-            )
-        }
+        val contentPadding = pageContentPadding(padding, extraBottom = 16.dp)
 
 
 
@@ -421,6 +418,7 @@ fun DynamicIslandNotificationPage() {
             label = stringResource(R.string.dialog_add_whitelist_hint),
             confirmText = stringResource(R.string.save),
             onDismiss = { showAddWhitelistDialog = false },
+            onDismissFinished = { if (!showAddWhitelistDialog) holdAddWhitelistDialog = false },
             onConfirm = { input ->
                 if (input.isNotBlank()) {
                     val success = ConfigRepository.addPackageToWhitelist(context, input)
@@ -449,6 +447,7 @@ fun DynamicIslandNotificationPage() {
             show = showDeleteWhitelistDialog,
             title = stringResource(R.string.dialog_delete_whitelist_title),
             onDismiss = { showDeleteWhitelistDialog = false },
+            onDismissFinished = { if (!showDeleteWhitelistDialog) holdDeleteWhitelistDialog = false },
             onConfirm = {
                 ConfigRepository.removePackageFromWhitelist(context, packageToDelete)
                 showDeleteWhitelistDialog = false
@@ -762,14 +761,16 @@ fun DynamicIslandNotificationPage() {
                             whitelist = whitelist,
                             onAddClick = {
                                 tempWhitelistInput = ""
+                                holdAddWhitelistDialog = true
                                 showAddWhitelistDialog = true
                             },
-                            showAddDialog = showAddWhitelistDialog,
+                            showAddDialog = holdAddWhitelistDialog,
                             onDeleteClick = { pkg ->
                                 packageToDelete = pkg
+                                holdDeleteWhitelistDialog = true
                                 showDeleteWhitelistDialog = true
                             },
-                            showDeleteDialog = showDeleteWhitelistDialog,
+                            showDeleteDialog = holdDeleteWhitelistDialog,
                             packageToDelete = packageToDelete
                         )
                     }
@@ -778,12 +779,12 @@ fun DynamicIslandNotificationPage() {
         }
     }
 
-    WindowBottomSheet(
+    AdaptiveBottomSheet(
         show = showPermissionSheet,
         title = stringResource(R.string.sheet_permission_title),
         backgroundColor = MiuixTheme.colorScheme.surface,
         startAction = {
-            IconButton(onClick = { showPermissionSheet = false }) {
+            AdaptiveIconButton(onClick = { showPermissionSheet = false }) {
                 Icon(
                     imageVector = MiuixIcons.Close,
                     contentDescription = stringResource(R.string.close),
@@ -792,7 +793,7 @@ fun DynamicIslandNotificationPage() {
             }
         },
         endAction = {
-            IconButton(onClick = confirmPermissionSheet) {
+            AdaptiveIconButton(onClick = confirmPermissionSheet) {
                 Icon(
                     imageVector = MiuixIcons.Ok,
                     contentDescription = stringResource(R.string.confirm),

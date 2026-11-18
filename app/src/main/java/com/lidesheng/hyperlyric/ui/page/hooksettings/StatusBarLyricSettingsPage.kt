@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -34,10 +35,10 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import com.lidesheng.hyperlyric.ui.utils.AdaptiveOverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.lidesheng.hyperlyric.ui.component.AdaptiveDialog
 import kotlin.math.roundToInt
 
 private val STATUS_BAR_LYRIC_PADDING_INPUT_PATTERN = Regex("-?\\d*(\\.\\d*)?")
@@ -587,7 +588,7 @@ private fun statusBarLyricIconSections(
                 checked = iconEnabled,
                 onCheckedChange = onIconEnabledChange,
             )
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_icon_style),
                 items = styleItems,
                 selectedIndex = styles.indexOf(iconStyle).coerceAtLeast(0),
@@ -595,7 +596,7 @@ private fun statusBarLyricIconSections(
                     styles.getOrNull(index)?.let(onIconStyleChange)
                 },
             )
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_insertion_order),
                 items = orderItems,
                 selectedIndex = iconOrder.coerceIn(0, 1),
@@ -673,7 +674,7 @@ private fun statusBarLyricInteractionSection(
                 onCheckedChange = onHapticFeedbackEnabledChange,
             )
             dropdowns.forEach { dropdown ->
-                OverlayDropdownPreference(
+                AdaptiveOverlayDropdownPreference(
                     title = dropdown.title,
                     items = dropdown.items,
                     selectedIndex = dropdown.values.indexOf(dropdown.selectedValue)
@@ -722,7 +723,7 @@ private fun statusBarLyricLayoutSections(
             .fillMaxWidth()
     ) {
         Column {
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_insertion_order),
                 items = insertionOptions,
                 selectedIndex = insertionOrder,
@@ -791,7 +792,7 @@ private fun statusBarLyricVisibilitySections(
             .padding(bottom = 12.dp)
             .fillMaxWidth()
     ) {
-        OverlayDropdownPreference(
+        AdaptiveOverlayDropdownPreference(
             title = stringResource(R.string.title_status_bar_lyric_content),
             items = listOf(
                 stringResource(R.string.option_content_none),
@@ -811,7 +812,7 @@ private fun statusBarLyricVisibilitySections(
             .fillMaxWidth()
     ) {
         Column {
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_clock_hide_behavior),
                 items = listOf(
                     stringResource(R.string.option_status_bar_lyric_clock_hide_never),
@@ -821,7 +822,7 @@ private fun statusBarLyricVisibilitySections(
                 selectedIndex = clockHideBehavior,
                 onSelectedIndexChange = onClockHideBehaviorChange,
             )
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_notification_icon_hide_behavior),
                 items = listOf(
                     stringResource(R.string.option_status_bar_lyric_notification_icon_hide_none),
@@ -831,7 +832,7 @@ private fun statusBarLyricVisibilitySections(
                 selectedIndex = notificationIconHideBehavior,
                 onSelectedIndexChange = onNotificationIconHideBehaviorChange,
             )
-            OverlayDropdownPreference(
+            AdaptiveOverlayDropdownPreference(
                 title = stringResource(R.string.title_status_bar_lyric_island_hide_behavior),
                 items = listOf(
                     stringResource(R.string.option_status_bar_lyric_island_hide_none),
@@ -904,11 +905,13 @@ private fun StatusBarLyricPaddingDialog(
     onDismiss: () -> Unit,
     onConfirm: (leftDp: Float, rightDp: Float) -> Unit,
 ) {
-    if (!show) return
 
     val initialValues = listOf(leftDp, rightDp)
-    var inputValues by remember(initialValues) {
+    var inputValues by remember {
         mutableStateOf(initialValues.map(::formatStatusBarLyricPaddingDp))
+    }
+    LaunchedEffect(show) {
+        if (show) inputValues = initialValues.map(::formatStatusBarLyricPaddingDp)
     }
     val parsedValues = inputValues.map { it.toFloatOrNull() }
     val canConfirm = parsedValues.all { value ->
@@ -921,14 +924,14 @@ private fun StatusBarLyricPaddingDialog(
         stringResource(R.string.label_status_bar_lyric_padding_right),
     )
 
-    WindowDialog(
+    AdaptiveDialog(
         title = stringResource(R.string.title_status_bar_lyric_padding),
         summary = stringResource(
             R.string.summary_status_bar_lyric_padding_dialog,
             formatStatusBarLyricPaddingDp(RootConstants.MIN_HOOK_STATUS_BAR_LYRIC_PADDING_DP),
             formatStatusBarLyricPaddingDp(RootConstants.MAX_HOOK_STATUS_BAR_LYRIC_PADDING_DP),
         ),
-        show = true,
+        show = show,
         onDismissRequest = onDismiss,
     ) {
         fun updateValue(index: Int, value: String) {
