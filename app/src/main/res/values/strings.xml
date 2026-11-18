@@ -185,6 +185,9 @@
     <string name="option_notification_media_layout_miui">MIUI 风格</string>
     <string name="option_notification_media_layout_pixelos">PixelOS 风格</string>
     <string name="title_media_card_background_theme">卡片背景颜色</string>
+    <string name="title_media_card_corner_radius">卡片圆角</string>
+    <string name="option_media_card_corner_radius_follow_system">跟随系统</string>
+    <string name="format_media_card_corner_radius">%1$d dp</string>
     <string name="option_media_card_theme_follow_system">跟随系统</string>
     <string name="option_media_card_theme_follow_system_default">跟随系统（默认）</string>
     <string name="option_media_card_theme_always_light">始终浅色</string>

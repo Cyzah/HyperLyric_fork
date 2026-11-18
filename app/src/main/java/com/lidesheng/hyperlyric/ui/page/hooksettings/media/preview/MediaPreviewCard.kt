@@ -53,6 +53,7 @@ import androidx.constraintlayout.compose.Dimension
 import androidx.constraintlayout.compose.Visibility
 import androidx.constraintlayout.compose.layoutId
 import com.lidesheng.hyperlyric.R
+import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.media.MediaCardTonePolicy
 import com.lidesheng.hyperlyric.root.mediacard.progress.view.SquigglySeekBar
 import com.lidesheng.hyperlyric.root.mediacard.progress.view.ThumbStyle
@@ -81,7 +82,8 @@ fun MediaPreviewCard(
     ambientFlowMode: Int = 0,
     waveProgress: Boolean = false,
     verticalProgressThumb: Boolean = false,
-    hideProgressThumb: Boolean = false
+    hideProgressThumb: Boolean = false,
+    cornerRadiusDp: Int = RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
 ) {
     val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
     val isSoftCoverDark = MediaCardTonePolicy.isSoftCoverDark(softCoverTone, isSystemDark)
@@ -121,7 +123,13 @@ fun MediaPreviewCard(
             .padding(horizontal = 12.dp)
             .padding(bottom = 12.dp),
         colors = if (backgroundStyle > 0) CardDefaults.defaultColors(color = Color.Transparent) else cardColors,
-        cornerRadius = 24.dp
+        cornerRadius = if (cornerRadiusDp >= 0) {
+            cornerRadiusDp.coerceAtMost(
+                RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+            ).dp
+        } else {
+            24.dp
+        }
     ) {
         val constraints = ConstraintSet {
             val albumArt = createRefFor("album_art")

@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.view.ViewGroup
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.StatusBarLyricPreferences
@@ -29,6 +30,7 @@ import com.lidesheng.hyperlyric.root.mediacard.MediaCardRuntimeConfig
 import com.lidesheng.hyperlyric.root.mediacard.controlcenter.ControlCenterMediaLayoutHooker
 import com.lidesheng.hyperlyric.root.mediacard.island.switcher.IslandMediaSessionCoordinator
 import com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaAmbientFlowHooker
+import com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker
 import com.lidesheng.hyperlyric.root.mediacard.island.layout.IslandExpandedMediaLayoutHooker
 import com.lidesheng.hyperlyric.root.mediacard.notification.NotificationMediaAmbientFlowHooker
 import com.lidesheng.hyperlyric.root.mediacard.notification.NotificationMediaCoverStyleHooker
@@ -234,9 +236,11 @@ class HookEntry : XposedModule() {
 
         val cleanupSucceeded = cleanupRuntime()
         if (!cleanupSucceeded) {
+            IslandExpandedMediaCornerRadiusHooker.bindPreferences(prefs)
             HookRuntimeRegistry.activate(this)
             restoreSuperIslandWhitelistListeners()
             runCatching {
+                runOnMainAndWait { IslandExpandedMediaCornerRadiusHooker.adoptViews(transfers.cornerRadiusViews) }
                 superIslandHotReloadCoordinator.adoptStatusBarRoots(transfers.statusBarRoots)
             }.onFailure { error ->
                 HookLogger.e(TAG, "恢复被拒绝热重载前的状态栏歌词宿主失败", error)
@@ -339,6 +343,10 @@ class HookEntry : XposedModule() {
                     error("runtime reinitialization returned failure")
                 }
                 runOnMainAndWait {
+                    IslandExpandedMediaCornerRadiusHooker.adoptViews(
+                        state?.cornerRadiusViews.orEmpty() +
+                            state?.islandTransfers.orEmpty().map { it.root }
+                    )
                     IslandMusicWaveColorHooker.adoptHotReloadCallbacks(state?.musicWaveCallbacks.orEmpty())
                     IslandMusicWaveSpectrumHooker.adoptHotReloadHolders(
                         state?.musicWaveHolders.orEmpty()
@@ -447,6 +455,7 @@ class HookEntry : XposedModule() {
 
     private fun installMediaCardHooks(classLoader: ClassLoader) {
         MediaCardRuntimeConfig.load(prefs)
+        IslandExpandedMediaCornerRadiusHooker.hook(this, prefs)
         IslandMediaSessionCoordinator.hook(this, classLoader)
         MediaCardConfigurationRefreshHooker.hook(this, classLoader)
         MediaProgressStyleHooker.hook(this, classLoader)
@@ -560,8 +569,9 @@ class HookEntry : XposedModule() {
         }
     }
 
-    /** Reinstall the Super Island support surface; media-card hooks stay in the old generation. */
+    /** Reinstall island effects, including live card corners; structural media hooks stay retained. */
     private fun installHotReloadSuperIslandHooks(classLoader: ClassLoader) {
+        IslandExpandedMediaCornerRadiusHooker.hook(this, prefs)
         installSuperIslandStatusBarHooks(classLoader)
         installSuperIslandLifecycleHooks(classLoader, hotReload = true)
     }
@@ -958,7 +968,7 @@ class HookEntry : XposedModule() {
             hosts += transfer.kind.name
             hosts += transfer.moduleType
         }
-        return ArrayList<Any?>(7).apply {
+        return ArrayList<Any?>(8).apply {
             add(HOT_RELOAD_TRANSFER_VERSION)
             add(meta)
             add(dispatcher)
@@ -966,6 +976,7 @@ class HookEntry : XposedModule() {
             add(ArrayList(transfers.statusBarRoots))
             add(transfers.musicWaveCallbacks)
             add(transfers.musicWaveHolders)
+            add(ArrayList(transfers.cornerRadiusViews))
         }
     }
 
@@ -1007,6 +1018,7 @@ class HookEntry : XposedModule() {
             // Older builds have no callback payload; their dynamic handles are still reclaimed above.
             musicWaveCallbacks = (transfer.getOrNull(5) as? ArrayList<*>).orEmpty(),
             musicWaveHolders = (transfer.getOrNull(6) as? ArrayList<*>).orEmpty(),
+            cornerRadiusViews = (transfer.getOrNull(7) as? ArrayList<*>)?.filterIsInstance<View>().orEmpty(),
         )
     }
 
@@ -1078,6 +1090,7 @@ class HookEntry : XposedModule() {
         val statusBarRoots: List<ViewGroup>,
         val musicWaveCallbacks: List<*>,
         val musicWaveHolders: List<*>,
+        val cornerRadiusViews: List<View>,
     )
 
     private fun findCurrentApplication(): Application? {

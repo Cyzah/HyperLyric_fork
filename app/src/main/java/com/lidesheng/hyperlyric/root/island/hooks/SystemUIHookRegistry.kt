@@ -5,6 +5,7 @@ import com.lidesheng.hyperlyric.root.island.effects.color.IslandMusicWaveColorHo
 import com.lidesheng.hyperlyric.root.island.effects.spectrum.IslandMusicWaveSpectrumHooker
 import com.lidesheng.hyperlyric.root.island.effects.glow.HookIslandGlow
 import com.lidesheng.hyperlyric.root.island.effects.glow.IslandProgressGlowHooker
+import com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker
 import com.lidesheng.hyperlyric.root.utils.DynamicFinder
 import com.lidesheng.hyperlyric.root.utils.HookLogger
 import io.github.libxposed.api.XposedModule
@@ -50,6 +51,7 @@ object SystemUIHookRegistry {
         try {
             IslandTextHooker.hook(module, cl)
             SodaIslandMiniWindowCompatHooker.hookPlugin(module, cl)
+            IslandExpandedMediaCornerRadiusHooker.hookPlugin(module, cl)
             if (installMediaCardHooks) {
                 IslandMediaCardSwitcherHooker.hook(module, cl)
                 IslandMediaSwipeHooker.hookCardSwitcher(module, cl)

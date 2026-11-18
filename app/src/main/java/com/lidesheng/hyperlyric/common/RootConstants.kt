@@ -177,6 +177,8 @@ object RootConstants {
         "key_hook_island_expanded_media_action_order"
     const val KEY_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_STYLE =
         "key_hook_island_expanded_media_background_style"
+    const val KEY_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP =
+        "key_hook_island_expanded_media_corner_radius_dp"
     const val KEY_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_BLUR =
         "key_hook_island_expanded_media_background_blur"
     const val KEY_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_COLOR_ANIMATION =
@@ -589,6 +591,10 @@ object RootConstants {
     const val ISLAND_EXPANDED_MEDIA_BACKGROUND_STYLE_SOFT_COVER = 5
     const val DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_STYLE =
         ISLAND_EXPANDED_MEDIA_BACKGROUND_STYLE_DEFAULT
+    const val DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP =
+        IslandExpandedMediaCornerRadiusPolicy.FOLLOW_SYSTEM
+    const val MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP =
+        IslandExpandedMediaCornerRadiusPolicy.MAX_DP
     const val DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_BLUR = 10
     const val DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_COLOR_ANIMATION = false
     const val DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_AUTO_INVERT = false

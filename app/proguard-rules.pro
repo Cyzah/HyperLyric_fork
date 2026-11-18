@@ -15,3 +15,10 @@
 -keep class com.hchen.superlyricapi.** { *; }
 -keep interface com.hchen.superlyricapi.** { *; }
 -dontwarn android.os.ServiceManager
+
+# Outline providers can survive API 102 reload in retained native media holders.
+-keepnames class com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker$CornerOutlineProvider
+-keepclassmembers class com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker$CornerOutlineProvider {
+    android.view.ViewOutlineProvider original;
+    boolean mediaBackground;
+}

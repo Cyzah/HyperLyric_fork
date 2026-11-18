@@ -25,7 +25,8 @@ internal object MediaCardRuntimeConfig {
                 "${snapshot.islandExpanded.cardSwitcherMode}/" +
                 "${snapshot.islandExpanded.cardSwitcherMaxCount}, " +
                 "ambient=${snapshot.islandExpanded.ambientFlowMode}, " +
-                "progress=${snapshot.islandExpanded.progressStyle}), " +
+                "progress=${snapshot.islandExpanded.progressStyle}, " +
+                "cornerRadiusDp=${snapshot.islandExpanded.cornerRadiusDp}), " +
                 "aodCollapseDisabled=${snapshot.alwaysOnDisplay.disableMediaCardCollapsing}"
         HookLogger.dState(
             stateId = "MediaCardRuntimeConfig",
@@ -304,7 +305,8 @@ internal object MediaCardRuntimeConfig {
         val backgroundBlur: Int,
         val backgroundColorAnimation: Boolean,
         val backgroundAutoInvert: Boolean,
-        val softCoverTone: Int
+        val softCoverTone: Int,
+        val cornerRadiusDp: Int = RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
     ) {
         companion object {
             fun defaults() = IslandExpanded(
@@ -342,7 +344,8 @@ internal object MediaCardRuntimeConfig {
                     RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_COLOR_ANIMATION,
                 backgroundAutoInvert =
                     RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_BACKGROUND_AUTO_INVERT,
-                softCoverTone = RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_SOFT_COVER_TONE
+                softCoverTone = RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_SOFT_COVER_TONE,
+                cornerRadiusDp = RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
             )
 
             fun from(prefs: SharedPreferences) = IslandExpanded(
@@ -473,6 +476,13 @@ internal object MediaCardRuntimeConfig {
                 ).coerceIn(
                     RootConstants.MEDIA_SOFT_COVER_TONE_LIGHT,
                     RootConstants.MEDIA_SOFT_COVER_TONE_FOLLOW_SYSTEM
+                ),
+                cornerRadiusDp = prefs.getInt(
+                    RootConstants.KEY_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                    RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+                ).coerceIn(
+                    RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                    RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
                 )
             )
         }

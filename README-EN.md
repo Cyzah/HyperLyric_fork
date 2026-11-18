@@ -41,6 +41,8 @@ Lyric preview, interlude countdowns, and configurable behavior for missing lyric
 
 Customize the media cards in Notification Center and expanded HyperIsland. Choose a layout, add cover colors, gradients, or ambient flow to the background, then adjust the cover, playback buttons, and progress bar. Configure each location separately and swipe between cards from multiple music apps in Notification Center.
 
+The expanded HyperIsland media card's Background tab also lets you follow the system corner radius or choose 0–50 dp (0 for square corners). Radius changes apply live, support API 102 hot reload, and also update the native outline glow. Expansion and collapse follow the native clip geometry, returning to the system radius once collapsed.
+
 ## Feature reference
 
 | Feature | Description | Version support |

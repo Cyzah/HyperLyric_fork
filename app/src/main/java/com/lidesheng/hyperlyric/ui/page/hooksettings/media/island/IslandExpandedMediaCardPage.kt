@@ -101,6 +101,17 @@ fun IslandExpandedMediaCardPage() {
             )
         )
     }
+    var islandExpandedCornerRadiusDp by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                RootConstants.KEY_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+            ).coerceIn(
+                RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+            )
+        )
+    }
     var islandExpandedBackgroundColorAnimation by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -317,6 +328,7 @@ fun IslandExpandedMediaCardPage() {
                                     actionOrder = islandExpandedActionOrder,
                                     actionAlignLeft = islandExpandedActionAlignLeft,
                                     cardTheme = islandExpandedCardTheme,
+                                    cornerRadiusDp = islandExpandedCornerRadiusDp,
                                     backgroundStyle = islandExpandedBackgroundStyle,
                                     backgroundBlur = islandExpandedBackgroundBlur,
                                     softCoverTone = islandExpandedSoftCoverTone,
@@ -383,6 +395,24 @@ fun IslandExpandedMediaCardPage() {
                     when (page) {
                         0 -> {
                             islandExpandedMediaBackgroundSection(
+                                cornerRadiusDp = islandExpandedCornerRadiusDp,
+                                onCornerRadiusDpChange = { radius ->
+                                    val clampedRadius = radius.coerceIn(
+                                        RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                                        RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+                                    )
+                                    islandExpandedCornerRadiusDp = clampedRadius
+                                    prefs.edit {
+                                        putInt(
+                                            RootConstants.KEY_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                                            clampedRadius
+                                        )
+                                    }
+                                    PrefsBridge.putInt(
+                                        RootConstants.KEY_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                                        clampedRadius
+                                    )
+                                },
                                 cardTheme = islandExpandedCardTheme,
                                 onCardThemeChange = { theme ->
                                     islandExpandedCardTheme = theme

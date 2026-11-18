@@ -143,10 +143,11 @@ internal object HookRuntimeRegistry {
     /**
      * API 102 is module-wide, while the product boundary is the media-card package. All current
      * Super Island, lyric runtime, color, lifecycle and whitelist capabilities are reloadable;
-     * only the explicitly namespaced media-card capabilities stay in the old generation.
+     * structural media-card capabilities stay in the old generation. Corner geometry is a live
+     * visual effect and is replaced even though its existing API 102 ids use the media namespace.
      */
     private fun isReloadableCapability(capability: String): Boolean =
-        !capability.startsWith("media.")
+        !capability.startsWith("media.") || capability.startsWith("media.island.corner_radius.")
 
     private fun capabilityFromId(id: String?): String? {
         val prefix = "$ID_PREFIX:"

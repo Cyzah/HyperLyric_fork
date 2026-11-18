@@ -1124,7 +1124,7 @@ object IslandExpandedMediaAmbientFlowHooker {
         val layoutParams = MediaFlowOverlayLayout.copyForOverlay(anchor.layoutParams) ?: return null
         val view = MediaFlowBackgroundView(anchor.context, state.customTimeline).apply {
             tag = CUSTOM_FLOW_VIEW_TAG
-            outlineProvider = anchor.outlineProvider
+            outlineProvider = IslandExpandedMediaCornerRadiusHooker.wrapMediaBackground(anchor.outlineProvider)
             clipToOutline = anchor.clipToOutline
         }
         val index = (parent.indexOfChild(anchor) + 1).coerceAtMost(parent.childCount)

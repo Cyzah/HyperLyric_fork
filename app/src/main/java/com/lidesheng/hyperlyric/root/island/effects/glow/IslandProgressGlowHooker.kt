@@ -12,6 +12,7 @@ import android.view.View
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.root.SystemUiEnhancementGate
 import com.lidesheng.hyperlyric.root.managedHook
+import com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker
 import com.lidesheng.hyperlyric.root.utils.HookLogger
 import io.github.libxposed.api.XposedInterface.Chain
 import io.github.libxposed.api.XposedInterface.Hooker
@@ -209,7 +210,10 @@ internal object IslandProgressGlowHooker {
             val pathTop = top - halfStroke + EDGE_OVERLAP_PX
             val pathRight = right + halfStroke - EDGE_OVERLAP_PX
             val pathBottom = bottom + halfStroke - EDGE_OVERLAP_PX
-            val radius = (islandRadius + halfStroke - EDGE_OVERLAP_PX).coerceAtMost(
+            val backgroundView = backgroundViewRef.get() ?: return
+            val currentRadius = IslandExpandedMediaCornerRadiusHooker.resolveRadiusPx(backgroundView, islandRadius)
+            val radius = (currentRadius + halfStroke - EDGE_OVERLAP_PX).coerceIn(
+                0f,
                 minOf(pathRight - pathLeft, pathBottom - pathTop) / 2f
             )
             updateTrackPath(pathLeft, pathTop, pathRight, pathBottom, radius)

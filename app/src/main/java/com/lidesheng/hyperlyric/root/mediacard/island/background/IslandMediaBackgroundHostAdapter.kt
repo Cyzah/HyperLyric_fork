@@ -4,6 +4,7 @@ import android.graphics.Outline
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker
 import android.widget.ImageView
 import com.lidesheng.hyperlyric.root.mediacard.background.MediaFlowOverlayLayout
 import java.lang.reflect.Field
@@ -142,21 +143,23 @@ internal class IslandMediaBackgroundHostAdapter(
             id = mediaBackgroundId
             tag = CUSTOM_BACKGROUND_TAG
             scaleType = ImageView.ScaleType.CENTER_CROP
-            outlineProvider = if (cornerRadiusId != 0) {
-                object : ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: Outline) {
-                        outline.setRoundRect(
-                            0,
-                            0,
-                            view.width,
-                            view.height,
-                            view.resources.getDimension(cornerRadiusId)
-                        )
+            outlineProvider = IslandExpandedMediaCornerRadiusHooker.wrapMediaBackground(
+                if (cornerRadiusId != 0) {
+                    object : ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: Outline) {
+                            outline.setRoundRect(
+                                0,
+                                0,
+                                view.width,
+                                view.height,
+                                view.resources.getDimension(cornerRadiusId)
+                            )
+                        }
                     }
+                } else {
+                    anchor.outlineProvider
                 }
-            } else {
-                anchor.outlineProvider
-            }
+            )
             clipToOutline = true
             setPadding(0, 0, 0, 0)
             visibility = View.INVISIBLE

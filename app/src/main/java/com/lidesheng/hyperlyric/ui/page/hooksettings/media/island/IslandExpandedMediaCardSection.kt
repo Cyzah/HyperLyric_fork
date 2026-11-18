@@ -182,6 +182,8 @@ fun LazyListScope.islandExpandedMediaElementSection(
 }
 
 fun LazyListScope.islandExpandedMediaBackgroundSection(
+    cornerRadiusDp: Int,
+    onCornerRadiusDpChange: (Int) -> Unit,
     cardTheme: Int,
     onCardThemeChange: (Int) -> Unit,
     backgroundStyle: Int,
@@ -204,6 +206,44 @@ fun LazyListScope.islandExpandedMediaBackgroundSection(
                 .padding(bottom = 12.dp)
                 .fillMaxWidth()
         ) {
+            var cornerRadiusSliderValue by remember(cornerRadiusDp) {
+                mutableIntStateOf(cornerRadiusDp)
+            }
+            BasicComponent(
+                title = stringResource(R.string.title_media_card_corner_radius),
+                endActions = {
+                    Text(
+                        text = if (cornerRadiusSliderValue < 0) {
+                            stringResource(R.string.option_media_card_corner_radius_follow_system)
+                        } else {
+                            stringResource(
+                                R.string.format_media_card_corner_radius,
+                                cornerRadiusSliderValue
+                            )
+                        },
+                        fontSize = MiuixTheme.textStyles.body2.fontSize,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantActions
+                    )
+                },
+                bottomAction = {
+                    Slider(
+                        value = cornerRadiusSliderValue.toFloat(),
+                        onValueChange = {
+                            cornerRadiusSliderValue = it.roundToInt().coerceIn(
+                                RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP,
+                                RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+                            )
+                        },
+                        onValueChangeFinished = {
+                            onCornerRadiusDpChange(cornerRadiusSliderValue)
+                        },
+                        valueRange =
+                            RootConstants.DEFAULT_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP.toFloat()..
+                                RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP.toFloat(),
+                        steps = RootConstants.MAX_HOOK_ISLAND_EXPANDED_MEDIA_CORNER_RADIUS_DP
+                    )
+                }
+            )
             val backgroundStyleValues = listOf(
                 RootConstants.ISLAND_EXPANDED_MEDIA_BACKGROUND_STYLE_DEFAULT,
                 RootConstants.ISLAND_EXPANDED_MEDIA_BACKGROUND_STYLE_COVER_ART,

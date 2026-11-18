@@ -114,6 +114,9 @@
   <string name="option_notification_media_layout_miui">نمط MIUI</string>
   <string name="option_notification_media_layout_pixelos">نمط PixelOS</string>
   <string name="title_media_card_background_theme">لون خلفية البطاقة</string>
+  <string name="title_media_card_corner_radius">نصف قطر زوايا البطاقة</string>
+  <string name="option_media_card_corner_radius_follow_system">اتباع النظام</string>
+  <string name="format_media_card_corner_radius">%1$d dp</string>
   <string name="option_media_card_theme_follow_system">اتباع النظام</string>
   <string name="option_media_card_theme_follow_system_default">اتباع النظام (افتراضي)</string>
   <string name="option_media_card_theme_always_light">فاتح دائمًا</string>

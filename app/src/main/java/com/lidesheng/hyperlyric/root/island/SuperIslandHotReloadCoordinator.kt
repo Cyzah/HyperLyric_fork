@@ -1,7 +1,9 @@
 package com.lidesheng.hyperlyric.root.island
 
+import android.view.View
 import android.view.ViewGroup
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
+import com.lidesheng.hyperlyric.root.mediacard.island.IslandExpandedMediaCornerRadiusHooker
 import com.lidesheng.hyperlyric.root.island.effects.album.IslandAlbumCoverStyleHooker
 import com.lidesheng.hyperlyric.root.island.effects.spectrum.IslandMusicWaveSpectrumHooker
 import com.lidesheng.hyperlyric.root.island.effects.color.IslandMusicWaveColorHooker
@@ -26,7 +28,8 @@ import io.github.libxposed.api.XposedModule
  *
  * This class owns ordering only.  Each renderer/effect still owns its resources, while
  * [com.lidesheng.hyperlyric.root.HookRuntimeRegistry] remains the owner of hook handles.  Media-card
- * hooks are deliberately absent from this coordinator and stay in their original generation.
+ * structural hooks stay in their original generation. The live media-card corner effect is
+ * transferred here with the other visual effects.
  */
 internal class SuperIslandHotReloadCoordinator(
     private val mainThread: MainThreadExecutor,
@@ -54,6 +57,7 @@ internal class SuperIslandHotReloadCoordinator(
                 statusBarRoots = statusBarRoots,
                 musicWaveCallbacks = musicWaveCallbacks,
                 musicWaveHolders = musicWaveHolders,
+                cornerRadiusViews = IslandExpandedMediaCornerRadiusHooker.prepareForHotReload(),
             )
         }
 
@@ -112,6 +116,7 @@ internal class SuperIslandHotReloadCoordinator(
                 StatusBarLyricRenderer.cleanupForHotReload()
                 HookIslandGlow.cleanupForHotReload()
                 IslandProgressGlowHooker.cleanupForHotReload()
+                IslandExpandedMediaCornerRadiusHooker.prepareForHotReload()
                 IslandAlbumCoverStyleHooker.cleanup()
                 IslandMusicWaveSpectrumHooker.cleanup()
                 IslandMusicWaveColorHooker.cleanup()
@@ -139,6 +144,7 @@ internal class SuperIslandHotReloadCoordinator(
         val statusBarRoots: List<ViewGroup>,
         val musicWaveCallbacks: ArrayList<Any?>,
         val musicWaveHolders: ArrayList<Any?>,
+        val cornerRadiusViews: List<View>,
     )
 
     private companion object {
