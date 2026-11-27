@@ -8,6 +8,7 @@ package com.lidesheng.hyperlyric.lyric.view.line
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Shader
@@ -31,7 +32,6 @@ import com.lidesheng.hyperlyric.lyric.view.drawWithinFadingEdges
 import com.lidesheng.hyperlyric.lyric.view.isAmllCountdownLine
 import com.lidesheng.hyperlyric.lyric.view.isCountdownLine
 import com.lidesheng.hyperlyric.lyric.view.line.model.LyricModel
-import com.lidesheng.hyperlyric.lyric.view.line.model.createModel
 import com.lidesheng.hyperlyric.lyric.view.line.model.emptyLyricModel
 import com.lidesheng.hyperlyric.lyric.view.sp
 import kotlin.math.ceil
@@ -311,13 +311,19 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
     }
 
     fun setLyric(rawLine: LyricLine?, useLineTimeline: Boolean = false) {
-        val line = if (rawLine?.text.isNullOrBlank() && !rawLine.isCountdownLine()) null else rawLine
+        applyLyric(createLineModel(rawLine), useLineTimeline)
+    }
 
+    internal fun setPreparedLyric(line: PreparedLyricLine, useLineTimeline: Boolean) {
+        applyLyric(line.model, useLineTimeline, line.matchesMeasurement(textPaint))
+    }
+
+    private fun applyLyric(model: LyricModel, useLineTimeline: Boolean, sizesReady: Boolean = false) {
         reset()
         scrollUnlocked = false
         scrollStarted = false
 
-        _model = line?.normalize()?.createModel() ?: emptyLyricModel()
+        _model = model
         activeRenderer = when {
             _model.isAmllCountdownLine() -> amllCountdownRenderer
             _model.isCountdownLine() -> countdownRenderer
@@ -325,7 +331,7 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
             _model.isPlainText -> scrollRenderer
             else -> syncRenderer
         }
-        refreshSizes()
+        if (!sizesReady) refreshSizes()
         updateColorsIfReady()
         requestLayout()
         invalidate()
@@ -337,8 +343,7 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
      * start a new line from its initial delay.
      */
     fun setLyricPreservingScroll(rawLine: LyricLine?, useLineTimeline: Boolean = false) {
-        val line = if (rawLine?.text.isNullOrBlank() && !rawLine.isCountdownLine()) null else rawLine
-        val model = line?.normalize()?.createModel() ?: emptyLyricModel()
+        val model = createLineModel(rawLine)
         val targetLineTimeline = useLineTimeline && model.isPlainText && !model.isCountdownLine()
         val currentLineTimeline = activeRenderer === lineTimelineRenderer
 
@@ -389,13 +394,17 @@ open class SpaceGateLyricLineView(context: Context, attrs: AttributeSet? = null)
      * Measures a candidate line with the same model-building rules as [setLyric], without
      * replacing the line that is currently being displayed.
      */
-    fun measureLineWidth(rawLine: LyricLine?): Float {
-        val line = if (rawLine?.text.isNullOrBlank() && !rawLine.isCountdownLine()) null else rawLine
-        val model = line?.normalize()?.createModel() ?: emptyLyricModel()
-        if (model.isAmllCountdownLine()) return amllCountdownRenderer.contentWidth()
-        if (model.isCountdownLine()) return countdownRenderer.contentWidth()
+    fun measureLineWidth(rawLine: LyricLine?): Float = prepareLyric(rawLine).width
+
+    internal fun prepareLyric(rawLine: LyricLine?): PreparedLyricLine {
+        val model = createLineModel(rawLine)
         model.updateSizes(textPaint)
-        return model.width
+        val width = when {
+            model.isAmllCountdownLine() -> amllCountdownRenderer.contentWidth()
+            model.isCountdownLine() -> countdownRenderer.contentWidth()
+            else -> model.width
+        }
+        return PreparedLyricLine(model, width, Paint(textPaint))
     }
 
     fun configureWith(

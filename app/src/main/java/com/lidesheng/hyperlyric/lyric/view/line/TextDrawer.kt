@@ -13,6 +13,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.text.TextPaint
 import androidx.core.graphics.withSave
 import com.lidesheng.hyperlyric.lyric.view.METADATA_PLACEHOLDER_WORD_MOTION
@@ -25,6 +26,7 @@ import kotlin.math.min
 
 internal class TextDrawer {
     private val revealDrawer = WordRevealDrawer()
+    private val stableTextRun = StableTextRun()
     private var bgColors = intArrayOf(Color.GRAY)
     private var hlColors = intArrayOf(Color.WHITE)
 
@@ -115,6 +117,8 @@ internal class TextDrawer {
 
     private val fontMetrics = Paint.FontMetrics()
     private var baselineOffset = 0f
+    private var lastRunTypeface: Typeface? = null
+    private var isSystemRunTypeface = true
 
     private val bgRainbowCache = RainbowShaderCache()
     private val hlRainbowCache = RainbowShaderCache()
@@ -354,7 +358,13 @@ internal class TextDrawer {
         baselineY: Float,
         paint: TextPaint
     ) {
+        if (clipStart >= clipEnd) return
+        val canBatch = canBatchTextRuns(paint)
+        var wordStart = 0
+        val text = model.wordText
         model.words.forEach { word ->
+            val textStart = wordStart
+            wordStart += word.text.length
             val motionSpec = word.motionSpec()
             if (!motionSpec.animateByChar) {
                 drawAnimatedTextUnit(
@@ -363,6 +373,7 @@ internal class TextDrawer {
                     start = 0,
                     end = word.text.length,
                     drawX = word.startPosition,
+                    advanceEnd = word.endPosition,
                     inkStart = word.startPosition + word.inkStartOffset,
                     inkEnd = word.startPosition + word.inkEndOffset,
                     motionStart = word.startPosition,
@@ -373,7 +384,10 @@ internal class TextDrawer {
                     clipBottom = clipBottom,
                     baselineY = baselineY,
                     paint = paint,
-                    motionSpec = motionSpec
+                    motionSpec = motionSpec,
+                    lineText = text,
+                    lineTextStart = textStart,
+                    canBatch = false
                 )
                 return@forEach
             }
@@ -402,6 +416,7 @@ internal class TextDrawer {
                     start = i,
                     end = i + 1,
                     drawX = charStart,
+                    advanceEnd = charEnd,
                     inkStart = charStart + word.charInkStartOffsets[i],
                     inkEnd = charStart + word.charInkEndOffsets[i],
                     motionStart = motionStart,
@@ -412,10 +427,28 @@ internal class TextDrawer {
                     clipBottom = clipBottom,
                     baselineY = baselineY,
                     paint = paint,
-                    motionSpec = motionSpec
+                    motionSpec = motionSpec,
+                    lineText = text,
+                    lineTextStart = textStart + i,
+                    canBatch = canBatch
                 )
             }
         }
+        drawStableTextRun(canvas, text, clipBottom, baselineY, paint)
+    }
+
+    private fun canBatchTextRuns(paint: TextPaint): Boolean {
+        if (paint.textAlign != Paint.Align.LEFT || paint.letterSpacing != 0f ||
+            !paint.fontFeatureSettings.isNullOrEmpty() || !paint.fontVariationSettings.isNullOrEmpty()
+        ) return false
+
+        val typeface = paint.typeface
+        if (typeface !== lastRunTypeface) {
+            lastRunTypeface = typeface
+            isSystemRunTypeface = typeface == null || typeface == Typeface.DEFAULT ||
+                    typeface == Typeface.create(Typeface.DEFAULT, typeface.weight, typeface.isItalic)
+        }
+        return isSystemRunTypeface
     }
 
     private fun drawAnimatedTextUnit(
@@ -424,6 +457,7 @@ internal class TextDrawer {
         start: Int,
         end: Int,
         drawX: Float,
+        advanceEnd: Float,
         inkStart: Float,
         inkEnd: Float,
         motionStart: Float,
@@ -434,7 +468,10 @@ internal class TextDrawer {
         clipBottom: Float,
         baselineY: Float,
         paint: TextPaint,
-        motionSpec: MotionSpec
+        motionSpec: MotionSpec,
+        lineText: String,
+        lineTextStart: Int,
+        canBatch: Boolean
     ) {
         if (inkEnd <= clipStart || inkStart >= clipEnd) return
 
@@ -448,9 +485,52 @@ internal class TextDrawer {
             motionSpec
         )
 
+        if (canBatch && isStableTextRunUnit(text[start], liftY, inkStart, inkEnd, clipStart, clipEnd)) {
+            if (!stableTextRun.canAppend(lineTextStart, drawX)) {
+                drawStableTextRun(canvas, lineText, clipBottom, baselineY, paint)
+            }
+            stableTextRun.append(lineTextStart, drawX, advanceEnd, inkStart, inkEnd)
+            return
+        }
+
+        drawStableTextRun(canvas, lineText, clipBottom, baselineY, paint)
+
         canvas.withSave {
             clipRect(visibleLeft, 0f, visibleRight, clipBottom)
             drawText(text, start, end, drawX, baselineY + liftY, paint)
+        }
+    }
+
+    private fun drawStableTextRun(
+        canvas: Canvas,
+        text: String,
+        clipBottom: Float,
+        baselineY: Float,
+        paint: TextPaint
+    ) {
+        val run = stableTextRun
+        if (run.isEmpty) return
+        try {
+            canvas.withSave {
+                clipRect(run.inkStart, 0f, run.inkEnd, clipBottom)
+                if (run.end - run.start == 1) {
+                    drawText(text, run.start, run.end, run.drawX, baselineY, paint)
+                } else {
+                    drawTextRun(
+                        text,
+                        run.start,
+                        run.end,
+                        run.start,
+                        run.end,
+                        run.drawX,
+                        baselineY,
+                        false,
+                        paint
+                    )
+                }
+            }
+        } finally {
+            run.clear()
         }
     }
 

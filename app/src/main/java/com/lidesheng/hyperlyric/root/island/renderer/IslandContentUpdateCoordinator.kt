@@ -300,13 +300,7 @@ internal object IslandContentUpdateCoordinator {
             // weight changes during a full island refresh.
             playbackActive = playbackActive,
             mediaInfo = mediaInfo,
-            onLineWillApply = { contentWidthPx ->
-                IslandDynamicWidthCoordinator.prepareLyricWidth(
-                    view,
-                    tag,
-                    contentWidthPx
-                )
-            },
+            onLineWillApply = IslandDynamicWidthCoordinator.lyricWidthPreflight(view, tag, config),
             onLineApplied = {
                 IslandDynamicWidthCoordinator.clearPreflight(view, tag)
                 IslandDynamicWidthCoordinator.requestRefresh(view)

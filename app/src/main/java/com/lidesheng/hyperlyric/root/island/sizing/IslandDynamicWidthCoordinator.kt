@@ -68,11 +68,22 @@ internal object IslandDynamicWidthCoordinator {
         }
     }
 
+    fun lyricWidthPreflight(
+        rootView: ViewGroup,
+        viewTag: String,
+        config: IslandSlotRuntimeConfig
+    ): ((Float) -> Boolean)? {
+        if (!config.geometry.isDynamicWidth ||
+            config.modeForTag(viewTag) != RootConstants.ISLAND_CONTENT_MODE_LYRIC
+        ) return null
+        return { contentWidthPx -> prepareLyricWidth(rootView, viewTag, contentWidthPx) }
+    }
+
     /**
      * Applies the candidate line width before the candidate line is committed to the lyric View.
      * Candidates remain available until the corresponding line-application callback clears them.
      */
-    fun prepareLyricWidth(
+    private fun prepareLyricWidth(
         rootView: ViewGroup,
         viewTag: String,
         contentWidthPx: Float

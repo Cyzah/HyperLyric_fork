@@ -17,9 +17,35 @@ import android.widget.LinearLayout
 import androidx.core.graphics.withScale
 import androidx.core.view.forEach
 import com.lidesheng.hyperlyric.common.lyric.LyricSecondaryContent
+import com.lidesheng.hyperlyric.lyric.model.LyricLine
+import com.lidesheng.hyperlyric.lyric.model.LyricMetadata
 import com.lidesheng.hyperlyric.lyric.model.interfaces.IRichLyricLine
 import com.lidesheng.hyperlyric.lyric.view.line.LyricLineView
+import com.lidesheng.hyperlyric.lyric.view.line.PreparedLyricLine
 import com.lidesheng.hyperlyric.lyric.view.yoyo.YoYoAnimation
+
+internal class PreparedRichLyricLine(
+    mainLine: LyricLine,
+    secondaryLine: LyricLine,
+    private val main: PreparedLyricLine,
+    private val secondary: PreparedLyricLine
+) {
+    private val mainSnapshot = mainLine.measurementSnapshot()
+    private val secondarySnapshot = secondaryLine.measurementSnapshot()
+
+    // Layout may defer a commit across frames. Match the latest assembled render data
+    // against the earlier measurement before reusing its geometry.
+    fun mainFor(line: LyricLine): PreparedLyricLine? = main.takeIf { mainSnapshot == line }
+    fun secondaryFor(line: LyricLine): PreparedLyricLine? =
+        secondary.takeIf { secondarySnapshot == line }
+
+    private fun LyricLine.measurementSnapshot(): LyricLine = copy(
+        words = words?.map { word ->
+            word.copy(metadata = word.metadata?.let { LyricMetadata(it.toMap()) })
+        },
+        metadata = metadata?.let { LyricMetadata(it.toMap()) }
+    )
+}
 
 @SuppressLint("ViewConstructor")
 class RichLyricLineView(
@@ -125,6 +151,7 @@ class RichLyricLineView(
         pendingMainLineApplied = null
         pendingMainLineCancelled = null
         preflightReadyGeneration = -1
+        preparedCandidate = null
         cancellation?.invoke()
 
         lineGeneration++
@@ -169,7 +196,10 @@ class RichLyricLineView(
         updateLayoutTransitionX(config)
     }
 
-    fun notifyLineChanged() = refreshLines()
+    fun notifyLineChanged() {
+        preparedCandidate = null
+        refreshLines()
+    }
 
     fun seekTo(position: Long) {
         main.seekTo(position)
@@ -254,6 +284,7 @@ class RichLyricLineView(
     }
 
     fun setStyle(style: LyricViewStyle) {
+        preparedCandidate = null
         displayLineByLine = style.lineDisplay
         main.wordReveal = style.wordReveal
         secondary.wordReveal = style.wordReveal
@@ -368,6 +399,7 @@ class RichLyricLineView(
         cancelNextLinePromotion()
         lineGeneration++
         preflightReadyGeneration = -1
+        preparedCandidate = null
         pendingMainLineWillApply = null
         pendingMainLineApplied = null
         val cancellation = pendingMainLineCancelled
@@ -400,6 +432,7 @@ class RichLyricLineView(
     private var oldSecondaryLine: IRichLyricLine? = null
     private var lineGeneration = 0
     private var preflightReadyGeneration = -1
+    private var preparedCandidate: PreparedRichLyricLine? = null
 
     internal val committedLine: IRichLyricLine? get() = oldLine
     internal val committedSecondaryLine: IRichLyricLine? get() = oldSecondaryLine
@@ -424,6 +457,7 @@ class RichLyricLineView(
             oldSecondaryLine === rawSecondaryLine && line.isTitleLine()
         ) {
             pendingMainLineWillApply = null
+            preparedCandidate = null
             dispatchMainLineApplied()
             return
         }
@@ -439,17 +473,20 @@ class RichLyricLineView(
         val mainResult = assembler.buildMain(line)
         val secResult = assembler.buildSecondary(line, rawSecondaryLine)
 
+        val onMainLineWillApply = pendingMainLineWillApply
         if (!skipMainLinePreflight) {
-            val onMainLineWillApply = pendingMainLineWillApply
             if (onMainLineWillApply != null) {
                 pendingMainLineWillApply = null
                 val generation = lineGeneration
+                val measuredMain = main.prepareLyric(mainResult.line)
+                val measuredSecondary = secondary.prepareLyric(secResult.line)
+                preparedCandidate = PreparedRichLyricLine(
+                    mainResult.line, secResult.line, measuredMain, measuredSecondary
+                )
                 val candidateScale = if (secResult.alwaysShow) multiLineScale else 1.0f
-                val candidateWidth = maxOf(
-                    main.measureLineWidth(mainResult.line),
-                    secondary.measureLineWidth(secResult.line)
-                ) * candidateScale
-                val shouldDefer = onMainLineWillApply.invoke(candidateWidth)
+                val shouldDefer = onMainLineWillApply(
+                    maxOf(measuredMain.width, measuredSecondary.width) * candidateScale
+                )
                 if (generation != lineGeneration) return
                 if (shouldDefer) {
                     preflightReadyGeneration = generation
@@ -496,8 +533,11 @@ class RichLyricLineView(
         // 本行会跟着动一下(owner 2026-10-09 真机反馈「第二行会影响第一行」)。
         if (mainContent.changed(mainResult.line, mainResult.isLineTimeline)) {
             mainNeedsSynchronization = true
+            val measured = preparedCandidate?.mainFor(mainResult.line)
             if (preserveMarquee) {
                 main.setLyricPreservingScroll(mainResult.line, mainResult.isLineTimeline)
+            } else if (measured != null) {
+                main.setPreparedLyric(measured, mainResult.isLineTimeline)
             } else {
                 main.setLyric(mainResult.line, mainResult.isLineTimeline)
             }
@@ -514,8 +554,11 @@ class RichLyricLineView(
         secondary.hasSimulatedWordTiming = secResult.hasSimulatedWordTiming
         if (secondaryContent.changed(secResult.line, secResult.isLineTimeline)) {
             secondaryNeedsSynchronization = true
+            val measured = preparedCandidate?.secondaryFor(secResult.line)
             if (preserveMarquee) {
                 secondary.setLyricPreservingScroll(secResult.line, secResult.isLineTimeline)
+            } else if (measured != null) {
+                secondary.setPreparedLyric(measured, secResult.isLineTimeline)
             } else {
                 secondary.setLyric(secResult.line, secResult.isLineTimeline)
             }
@@ -526,6 +569,7 @@ class RichLyricLineView(
         // 暂停刷新；过早更新 oldLine 会让后续重入误以为占位符已经显示，从而跳过 setLyric。
         oldLine = line
         oldSecondaryLine = rawSecondaryLine
+        preparedCandidate = null
         if (requestMarquee) requestStartMarquee()
         dispatchMainLineApplied()
     }
