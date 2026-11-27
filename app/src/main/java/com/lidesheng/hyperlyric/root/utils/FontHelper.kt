@@ -208,7 +208,7 @@ object FontHelper {
         val customFontPath: String?
     )
 
-    private data class FontFileState(
+    internal data class FontFileState(
         val path: String,
         val exists: Boolean,
         val readable: Boolean,

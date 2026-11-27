@@ -9,7 +9,6 @@
 package com.lidesheng.hyperlyric.lyric.view.line
 
 import android.graphics.Canvas
-import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.TextPaint
 import com.lidesheng.hyperlyric.lyric.view.LyricPlayListener
@@ -17,8 +16,8 @@ import com.lidesheng.hyperlyric.lyric.view.line.model.LyricModel
 
 internal class SpaceGateWordSyncRenderer(private val view: SpaceGateLyricLineView) : LineRenderer {
 
-    val bgPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
-    val hlPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    val bgPaint = TextPaintX()
+    val hlPaint = TextPaintX()
 
     private val progressController = WordProgressController()
     private val scrollStepper = ScrollStepper()

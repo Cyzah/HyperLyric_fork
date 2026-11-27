@@ -38,7 +38,7 @@ internal object SlotContentCoordinator {
         mediaInfo: MediaMetadataHelper.MediaInfo = currentMediaInfo(view.context),
         force: Boolean = false,
         coverPaletteBackgroundIsDark: Boolean = true
-    ) {
+    ): Boolean {
         val resolvedMode = renderedModes[view] ?: config.resolveContentMode(mode)
         val usePlainTextLyricClock = resolvedMode == RootConstants.ISLAND_CONTENT_MODE_LYRIC &&
                 config.lyricMarqueeEnabled && LyriconDataBridge.isTextMode
@@ -52,7 +52,7 @@ internal object SlotContentCoordinator {
                 0L
             }
         )
-        IslandSlotStyleAssembler.configureView(
+        return IslandSlotStyleAssembler.configureView(
             view = view,
             prefs = prefs,
             config = config,
@@ -170,7 +170,7 @@ internal object SlotContentCoordinator {
         }
     }
 
-    private fun currentMediaInfo(context: Context): MediaMetadataHelper.MediaInfo {
+    internal fun currentMediaInfo(context: Context): MediaMetadataHelper.MediaInfo {
         val targetPkg = LyriconDataBridge.currentLyricPackageName ?: ""
         return CurrentMediaInfoResolver.getMediaInfo(context, targetPkg, HookLogger)
     }

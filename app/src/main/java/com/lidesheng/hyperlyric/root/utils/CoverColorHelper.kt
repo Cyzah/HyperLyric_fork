@@ -2,8 +2,14 @@ package com.lidesheng.hyperlyric.root.utils
 
 import android.graphics.Bitmap
 import android.media.session.MediaSession
+import android.os.Handler
+import android.os.Looper
 import com.lidesheng.hyperlyric.common.color.ColorExtractor
 import com.lidesheng.hyperlyric.common.media.MediaMetadataHelper
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 object CoverColorHelper {
@@ -22,9 +28,32 @@ object CoverColorHelper {
 
     class ArtworkRequest internal constructor(
         val colorSession: ColorSession,
-        val revision: Long,
-        internal val cacheKey: ArtworkCacheKey,
-        internal val fingerprint: ArtworkFingerprint
+        val revision: Long
+    )
+
+    private class ArtworkInput(
+        val colorSession: ColorSession,
+        val cacheKey: ArtworkCacheKey,
+        val mediaInfo: MediaMetadataHelper.MediaInfo,
+        val bitmap: Bitmap,
+        val generation: Int
+    ) {
+        fun matches(other: ArtworkInput): Boolean =
+            colorSession === other.colorSession && cacheKey == other.cacheKey &&
+                bitmap === other.bitmap && generation == other.generation
+
+        fun hasCurrentPixels(): Boolean = !bitmap.isRecycled && bitmap.generationId == generation
+
+        fun canReusePendingPalette(previous: ArtworkInput): Boolean =
+            colorSession === previous.colorSession && cacheKey == previous.cacheKey &&
+                (cacheKey.songId != null || cacheKey.mediaId != null) &&
+                bitmap !== previous.bitmap && hasCurrentPixels() && previous.hasCurrentPixels()
+    }
+
+    private class PublishedArtwork(
+        val input: ArtworkInput,
+        val palette: CacheEntry,
+        val colorRevision: Long
     )
 
     private data class CacheEntry(
@@ -32,7 +61,7 @@ object CoverColorHelper {
         val colors: Pair<IntArray, IntArray>
     )
 
-    internal data class ArtworkCacheKey(
+    private data class ArtworkCacheKey(
         val packageName: String,
         val sessionToken: MediaSession.Token,
         val songId: String?,
@@ -40,8 +69,10 @@ object CoverColorHelper {
     )
 
     internal class ArtworkFingerprint(
-        val pixels: IntArray
+        private val pixels: IntArray
     ) {
+        fun hasSamePixels(other: ArtworkFingerprint): Boolean = pixels.contentEquals(other.pixels)
+
         fun isSimilarTo(other: ArtworkFingerprint): Boolean {
             if (pixels.size != other.pixels.size || pixels.isEmpty()) return false
             var totalDelta = 0L
@@ -59,8 +90,27 @@ object CoverColorHelper {
     private var sessionRevision = 0L
     private var artworkRevision = 0L
     private var activeSession: ColorSession? = null
+    private var selectedArtwork: ArtworkInput? = null
+    private var artworkInFlight = false
     private var activeArtworkRequest: ArtworkRequest? = null
+    private var lastPublishedArtwork: PublishedArtwork? = null
     private val keyedCache = LinkedHashMap<ArtworkCacheKey, CacheEntry>()
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    // An idle worker must release its module generation after a SystemUI hot reload.
+    private val artworkExecutor = ThreadPoolExecutor(
+        0, 1, 30L, TimeUnit.SECONDS, ArrayBlockingQueue(1)
+    ) { work ->
+        Thread(work, "HyperLyric-CoverColors").apply { isDaemon = true }
+    }
+
+    @Volatile
+    private var onArtworkColorsReady: ((ArtworkRequest, MediaMetadataHelper.MediaInfo) -> Unit)? = null
+
+    internal fun setOnArtworkColorsReady(
+        listener: ((ArtworkRequest, MediaMetadataHelper.MediaInfo) -> Unit)?
+    ) {
+        onArtworkColorsReady = listener
+    }
 
     /** Only the lyric-source binding coordinator can advance this lease. */
     @Synchronized
@@ -81,7 +131,7 @@ object CoverColorHelper {
             sessionToken = sessionToken
         ).also {
             activeSession = it
-            activeArtworkRequest = null
+            clearArtworkLocked()
         }
     }
 
@@ -90,7 +140,7 @@ object CoverColorHelper {
         if (activeSession == null) return false
         val revision = activeSession?.revision
         activeSession = null
-        activeArtworkRequest = null
+        clearArtworkLocked()
         HookLogger.dState(
             stateId = "CoverColorHelper.session",
             tag = TAG,
@@ -119,118 +169,122 @@ object CoverColorHelper {
     fun currentSession(mediaInfo: MediaMetadataHelper.MediaInfo): ColorSession? =
         activeSession?.takeIf { matchesSessionLocked(it, mediaInfo) }
 
-    /** Authorizes artwork only when it comes from the lease's exact MediaSession. */
-    private fun resolveArtworkRequest(
-        mediaInfo: MediaMetadataHelper.MediaInfo
-    ): ArtworkRequest? {
-        val bitmap = mediaInfo.albumArt ?: return null
-        if (bitmap.isRecycled) {
-            HookLogger.dState(
-                stateId = "CoverColorHelper.artwork",
-                tag = TAG,
-                state = "recycled"
-            ) {
-                "封面取色跳过: reason=bitmap_recycled"
-            }
+    /**
+     * Requests the current MediaSession artwork. A request becomes visible only after its shared
+     * palette is ready. While extraction is pending, consumers use their usual fallback colors.
+     */
+    @Synchronized
+    fun ensureArtworkColors(mediaInfo: MediaMetadataHelper.MediaInfo): ArtworkRequest? {
+        val current = activeSession ?: return null
+        val previous = selectedArtwork
+        if (previous != null && previous.mediaInfo === mediaInfo && previous.hasCurrentPixels()) {
+            return activeArtworkRequest
+        }
+        val incomingIdentity = mediaInfo.identity.normalized()
+        if (incomingIdentity.packageName != current.packageName ||
+            incomingIdentity.sessionToken != current.sessionToken
+        ) return null
+
+        val bitmap = mediaInfo.albumArt?.takeUnless { it.isRecycled } ?: run {
+            clearArtworkLocked()
             return null
         }
-        val fingerprint = bitmapFingerprint(bitmap)
-        return synchronized(this) {
-            val current = activeSession ?: run {
-                HookLogger.dState(
-                    stateId = "CoverColorHelper.artwork",
-                    tag = TAG,
-                    state = "no_session"
-                ) {
-                    "封面取色跳过: reason=no_active_color_session"
-                }
-                return@synchronized null
-            }
-            val incomingIdentity = mediaInfo.identity.normalized()
-            if (!matchesSessionLocked(current, mediaInfo)) {
-                HookLogger.dState(
-                    stateId = "CoverColorHelper.artwork",
-                    tag = TAG,
-                    state = "session_mismatch|${current.revision}|" +
-                            "${incomingIdentity.packageName}|" +
-                            "${incomingIdentity.sessionToken?.hashCode()}"
-                ) {
-                    "封面取色跳过: reason=session_mismatch, " +
-                            "sessionRevision=${current.revision}, " +
-                            "boundPackage=${current.packageName}, " +
-                            "boundTokenHash=${current.sessionToken.hashCode()}, " +
-                            "mediaPackage=${incomingIdentity.packageName.ifEmpty { "<empty>" }}, " +
-                            "mediaTokenHash=${incomingIdentity.sessionToken?.hashCode()}"
-                }
-                return@synchronized null
-            }
-            val cacheKey = ArtworkCacheKey(
+        val input = ArtworkInput(
+            colorSession = current,
+            cacheKey = ArtworkCacheKey(
                 packageName = current.packageName,
                 sessionToken = current.sessionToken,
                 songId = incomingIdentity.songId,
                 mediaId = incomingIdentity.mediaId
-            )
+            ),
+            mediaInfo = mediaInfo,
+            bitmap = bitmap,
+            generation = bitmap.generationId
+        )
+        val sameInput = previous?.matches(input) == true
+        selectedArtwork = input
+        if (sameInput) return currentArtworkRequest()
 
-            val activeRequest = activeArtworkRequest
-            if (activeRequest != null &&
-                isCurrentSessionLocked(activeRequest.colorSession) &&
-                activeRequest.fingerprint.isSimilarTo(fingerprint)
-            ) {
-                return@synchronized activeRequest
+        activeArtworkRequest = null
+        startArtworkLocked()
+        return null
+    }
+
+    private fun startArtworkLocked() {
+        if (artworkInFlight) return
+        val input = selectedArtwork ?: return
+        val lastPalette = lastPublishedArtwork?.palette
+        val keyedPalette = keyedCache[input.cacheKey]
+        artworkInFlight = true
+        try {
+            artworkExecutor.execute {
+                val palette = try {
+                    resolvePalette(input, lastPalette, keyedPalette)
+                } catch (error: RuntimeException) {
+                    HookLogger.w(TAG, "封面调色板提取失败", error)
+                    null
+                }
+                if (!mainHandler.post { completeArtwork(input, palette) }) {
+                    synchronized(this) { artworkInFlight = false }
+                }
             }
-
-            ArtworkRequest(
-                colorSession = current,
-                revision = ++artworkRevision,
-                cacheKey = cacheKey,
-                fingerprint = fingerprint
-            ).also { activeArtworkRequest = it }
+        } catch (error: RejectedExecutionException) {
+            artworkInFlight = false
+            HookLogger.w(TAG, "封面调色板任务调度失败", error)
         }
     }
 
-    /**
-     * Resolve the current MediaSession artwork and populate its shared full palette once.
-     * Renderers and individual color consumers must reuse this cache instead of treating
-     * component callbacks (such as MusicWave) as artwork sources.
-     */
-    fun ensureArtworkColors(mediaInfo: MediaMetadataHelper.MediaInfo): ArtworkRequest? {
-        val bitmap = mediaInfo.albumArt?.takeUnless { it.isRecycled } ?: run {
-            invalidateArtworkIfOwned(
-                mediaInfo = mediaInfo,
-                reason = if (mediaInfo.albumArt == null) "artwork_missing" else "artwork_recycled"
-            )
-            return null
-        }
-        val request = resolveArtworkRequest(mediaInfo) ?: return null
-        val cachedColors = getCachedColors(
-            useGradient = true,
-            request = request
-        )
-        val colors = cachedColors ?: extractColors(
-            bitmap = bitmap,
-            useGradient = true,
-            request = request
-        )
-        val current = request.takeIf(::isCurrentArtwork)
-        val paletteState = when {
-            current == null -> "stale_request|${request.revision}"
-            colors == null -> "no_palette|${request.revision}"
-            colors.first.isEmpty() || colors.second.isEmpty() ->
-                "empty_palette|${request.revision}"
+    private fun resolvePalette(
+        input: ArtworkInput,
+        lastPalette: CacheEntry?,
+        keyedPalette: CacheEntry?
+    ): CacheEntry? {
+        if (!input.hasCurrentPixels()) return null
+        val fingerprint = bitmapFingerprint(input.bitmap) ?: return null
+        if (lastPalette?.artworkFingerprint?.isSimilarTo(fingerprint) == true) return lastPalette
+        if (keyedPalette?.artworkFingerprint?.isSimilarTo(fingerprint) == true) return keyedPalette
+        if (!input.hasCurrentPixels()) return null
+        val colors = extractPalette(input.bitmap) ?: return null
+        if (colors.first.isEmpty() || colors.second.isEmpty()) return null
+        return CacheEntry(fingerprint, colors)
+    }
 
-            cachedColors != null -> "cache_hit|${request.revision}|${colors.first.size}|${colors.second.size}"
-            else -> "extracted|${request.revision}|${colors.first.size}|${colors.second.size}"
+    private fun completeArtwork(input: ArtworkInput, palette: CacheEntry?) {
+        val (request, mediaInfo) = synchronized(this) {
+            artworkInFlight = false
+            // A -> B -> A can reuse the original work if A still refers to the same pixels.
+            val selected = selectedArtwork
+            if (selected == null || !selected.matches(input)) {
+                startArtworkLocked()
+                return
+            }
+            if (palette == null || !input.hasCurrentPixels()) return
+
+            keyedCache[input.cacheKey] = palette
+            trimCache()
+            val ready = ArtworkRequest(input.colorSession, ++artworkRevision)
+            val previous = lastPublishedArtwork
+            val colorRevision = previous?.takeIf { it.palette === palette }?.colorRevision
+                ?: ready.revision
+            lastPublishedArtwork = PublishedArtwork(selected, palette, colorRevision)
+            activeArtworkRequest = ready
+            ready to selected.mediaInfo
         }
         HookLogger.dState(
             stateId = "CoverColorHelper.palette",
             tag = TAG,
-            state = paletteState
+            state = "ready|${request.revision}"
         ) {
             "封面调色板结果: sessionRevision=${request.colorSession.revision}, " +
-                    "artworkRevision=${request.revision}, source=${paletteState.substringBefore('|')}, " +
-                    "onWhite=${colors?.first?.size ?: 0}, onBlack=${colors?.second?.size ?: 0}"
+                    "artworkRevision=${request.revision}"
         }
-        return current
+        if (isCurrentArtwork(request)) {
+            try {
+                onArtworkColorsReady?.invoke(request, mediaInfo)
+            } catch (error: RuntimeException) {
+                HookLogger.w(TAG, "封面调色板更新失败", error)
+            }
+        }
     }
 
     /**
@@ -265,31 +319,10 @@ object CoverColorHelper {
         )
     }
 
-    private fun invalidateArtworkIfOwned(
-        mediaInfo: MediaMetadataHelper.MediaInfo,
-        reason: String
-    ) {
-        synchronized(this) {
-            val current = activeSession ?: return
-            val incomingIdentity = mediaInfo.identity.normalized()
-            if (incomingIdentity.packageName != current.packageName ||
-                incomingIdentity.sessionToken != current.sessionToken ||
-                activeArtworkRequest == null
-            ) {
-                return
-            }
-            val previousRevision = activeArtworkRequest?.revision
-            activeArtworkRequest = null
-            artworkRevision++
-            HookLogger.dState(
-                stateId = "CoverColorHelper.artwork",
-                tag = TAG,
-                state = "invalidated|${current.revision}|$previousRevision|$reason"
-            ) {
-                "封面颜色授权已失效: reason=$reason, sessionRevision=${current.revision}, " +
-                        "previousArtworkRevision=$previousRevision"
-            }
-        }
+    private fun clearArtworkLocked() {
+        selectedArtwork = null
+        activeArtworkRequest = null
+        lastPublishedArtwork = null
     }
 
     @Synchronized
@@ -302,72 +335,26 @@ object CoverColorHelper {
         return activeArtworkRequest?.takeIf(::isCurrentArtworkLocked)
     }
 
-    /**
-     * One authorized artwork is extracted once. A normalized content
-     * fingerprint allows pause/resume bitmap instances to share colors while still replacing a
-     * transitional image when the session publishes its real artwork.
-     */
-    private fun extractColors(
-        bitmap: Bitmap,
-        useGradient: Boolean,
-        request: ArtworkRequest
-    ): Pair<IntArray, IntArray>? {
-        if (bitmap.isRecycled) return null
-        val cachedColors = synchronized(this) {
-            if (!isCurrentArtworkLocked(request)) return@synchronized null
-            keyedCache[request.cacheKey]
-                ?.takeIf {
-                    it.artworkFingerprint.isSimilarTo(request.fingerprint)
-                }
-                ?.colors
-        }
-        if (cachedColors != null) {
-            return cachedColors.forGradient(useGradient)
-        }
-
-        val extractedColors = extractPalette(bitmap) ?: return null
-        val colors = synchronized(this) {
-            if (!isCurrentArtworkLocked(request)) return@synchronized null
-            val latest = keyedCache[request.cacheKey]
-            if (latest?.artworkFingerprint?.isSimilarTo(request.fingerprint) == true) {
-                latest.colors
-            } else {
-                extractedColors.also {
-                    keyedCache[request.cacheKey] = CacheEntry(
-                        request.fingerprint,
-                        it
-                    )
-                    trimCache()
-                }
-            }
-        }
-        if (colors == null) {
-            HookLogger.dState(
-                stateId = "CoverColorHelper.extract",
-                tag = TAG,
-                state = "discarded|${request.colorSession.revision}|${request.revision}"
-            ) {
-                "封面调色板未写入缓存: reason=stale_artwork_request, " +
-                        "sessionRevision=${request.colorSession.revision}, artworkRevision=${request.revision}"
-            }
-        }
-        return colors?.forGradient(useGradient)
-    }
-
     @Synchronized
     fun getCachedColors(
         useGradient: Boolean,
         session: ColorSession
     ): Pair<IntArray, IntArray>? {
+        return getPublishedArtworkLocked(session)?.palette?.colors?.forGradient(useGradient)
+    }
+
+    /** Tracks the usable palette through equivalent bitmap replacements and pending fallback. */
+    @Synchronized
+    internal fun cachedColorsRevision(session: ColorSession): Long? =
+        getPublishedArtworkLocked(session)?.colorRevision
+
+    private fun getPublishedArtworkLocked(session: ColorSession): PublishedArtwork? {
         if (!isCurrentSessionLocked(session)) return null
-        val request = activeArtworkRequest
-            ?.takeIf { it.colorSession.revision == session.revision }
-            ?.takeIf(::isCurrentArtworkLocked)
-            ?: return null
-        return keyedCache[request.cacheKey]
-            ?.takeIf { it.artworkFingerprint.isSimilarTo(request.fingerprint) }
-            ?.colors
-            ?.forGradient(useGradient)
+        val published = lastPublishedArtwork ?: return null
+        if (currentArtworkRequest() != null) return published
+        return published.takeIf {
+            artworkInFlight && selectedArtwork?.canReusePendingPalette(it.input) == true
+        }
     }
 
     @Synchronized
@@ -376,18 +363,13 @@ object CoverColorHelper {
         request: ArtworkRequest
     ): Pair<IntArray, IntArray>? {
         if (!isCurrentArtworkLocked(request)) return null
-        return keyedCache[request.cacheKey]
-            ?.takeIf {
-                it.artworkFingerprint.isSimilarTo(request.fingerprint)
-            }
-            ?.colors
-            ?.forGradient(useGradient)
+        return lastPublishedArtwork?.palette?.colors?.forGradient(useGradient)
     }
 
     @Synchronized
     fun clearCache() {
         activeSession = null
-        activeArtworkRequest = null
+        clearArtworkLocked()
         keyedCache.clear()
     }
 
@@ -408,10 +390,7 @@ object CoverColorHelper {
     }
 
     private fun isCurrentArtworkLocked(request: ArtworkRequest): Boolean {
-        val current = activeArtworkRequest ?: return false
-        return isCurrentSessionLocked(request.colorSession) &&
-                current.revision == request.revision &&
-                current.cacheKey == request.cacheKey
+        return activeArtworkRequest === request && selectedArtwork?.hasCurrentPixels() == true
     }
 
     private fun Pair<IntArray, IntArray>.forGradient(
@@ -433,19 +412,18 @@ object CoverColorHelper {
     /**
      * 将封面缩放成固定网格后比较平均像素差，忽略同一封面在尺寸、压缩上的轻微变化。
      */
-    private fun bitmapFingerprint(bitmap: Bitmap): ArtworkFingerprint {
+    internal fun bitmapFingerprint(bitmap: Bitmap): ArtworkFingerprint? {
         val scaled = Bitmap.createScaledBitmap(
             bitmap,
             FINGERPRINT_GRID_SIZE,
             FINGERPRINT_GRID_SIZE,
             true
         )
-        val readable = if (scaled.config == Bitmap.Config.HARDWARE) {
-            scaled.copy(Bitmap.Config.ARGB_8888, false) ?: scaled
-        } else {
-            scaled
-        }
+        var readable = scaled
         return try {
+            if (scaled.config == Bitmap.Config.HARDWARE) {
+                readable = scaled.copy(Bitmap.Config.ARGB_8888, false) ?: return null
+            }
             val pixels = IntArray(FINGERPRINT_GRID_SIZE * FINGERPRINT_GRID_SIZE)
             readable.getPixels(
                 pixels,

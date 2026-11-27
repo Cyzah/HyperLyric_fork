@@ -1,5 +1,7 @@
 package com.lidesheng.hyperlyric.root.statusbar
 
+import com.lidesheng.hyperlyric.common.media.MediaMetadataHelper
+
 import android.app.KeyguardManager
 import android.content.Context
 import android.os.Handler
@@ -189,14 +191,19 @@ internal object StatusBarLyricRenderer {
         }
     }
 
-    fun updateTextColors() {
+    fun updateTextColors() = refreshTextColors(null)
+
+    internal fun updateTextColors(mediaInfo: MediaMetadataHelper.MediaInfo) =
+        refreshTextColors(mediaInfo)
+
+    private fun refreshTextColors(mediaInfo: MediaMetadataHelper.MediaInfo?) {
         runOnMain {
             val prefs = HookEntry.instance?.prefs ?: return@runOnMain
             if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_STATUS_BAR)) {
                 return@runOnMain
             }
             StatusBarLyricHostRegistry.liveHosts().forEach { host ->
-                host.refreshTextStyle(prefs)
+                host.refreshTextColors(prefs, mediaInfo)
             }
         }
     }
@@ -213,7 +220,7 @@ internal object StatusBarLyricRenderer {
             if (!LyricTextColorStylePolicy.usesCoverColor(style)) return@runOnMain
 
             StatusBarLyricHostRegistry.liveHosts().forEach { host ->
-                host.refreshTextStyle(prefs, forceStyle = false)
+                host.refreshTextColors(prefs)
             }
         }
     }

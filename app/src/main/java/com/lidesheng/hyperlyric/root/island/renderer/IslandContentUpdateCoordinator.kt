@@ -32,19 +32,16 @@ import com.lidesheng.hyperlyric.root.utils.HookLogger
  */
 internal object IslandContentUpdateCoordinator {
 
-    fun invalidate() {
-        SlotContentCoordinator.invalidate()
-    }
-
     fun updateContentForView(
         view: ViewGroup,
         packageName: String,
         prefs: SharedPreferences,
         config: IslandSlotRuntimeConfig,
         playbackActive: Boolean,
-        hostKind: IslandViewRegistry.HostKind
+        hostKind: IslandViewRegistry.HostKind,
+        mediaInfo: MediaMetadataHelper.MediaInfo =
+            CurrentMediaInfoResolver.getMediaInfo(view.context, packageName, HookLogger),
     ) {
-        val mediaInfo = CurrentMediaInfoResolver.getMediaInfo(view.context, packageName, HookLogger)
         prepareSharedCoverPalette(mediaInfo, prefs)
         if (hostKind == IslandViewRegistry.HostKind.REAL) {
             IslandHostFacade.updateHostGlow(view, prefs)
@@ -144,9 +141,10 @@ internal object IslandContentUpdateCoordinator {
         config: IslandSlotRuntimeConfig,
         playbackActive: Boolean
     ) {
-        val mediaInfo = CurrentMediaInfoResolver.getMediaInfo(
-            view.context, LyriconDataBridge.currentLyricPackageName.orEmpty(), HookLogger
-        )
+        val packageName = LyriconDataBridge.currentLyricPackageName.orEmpty()
+        val mediaInfo = LyriconDataBridge.currentResolvedMediaInfo
+            ?.takeIf { it.identity.packageName == packageName }
+            ?: CurrentMediaInfoResolver.getMediaInfo(view.context, packageName, HookLogger)
         updateLyricSlot(
             view,
             IslandProbeUtils.LEFT_TEST_VIEW_TAG,
@@ -171,9 +169,11 @@ internal object IslandContentUpdateCoordinator {
         view: ViewGroup,
         packageName: String,
         prefs: SharedPreferences,
-        config: IslandSlotRuntimeConfig
+        config: IslandSlotRuntimeConfig,
+        artworkMedia: MediaMetadataHelper.MediaInfo? = null
     ) {
-        val mediaInfo = CurrentMediaInfoResolver.getMediaInfo(view.context, packageName, HookLogger)
+        val mediaInfo = artworkMedia
+            ?: CurrentMediaInfoResolver.getMediaInfo(view.context, packageName, HookLogger)
         prepareSharedCoverPalette(mediaInfo, prefs)
         updateSlotColors(
             view,
@@ -215,7 +215,7 @@ internal object IslandContentUpdateCoordinator {
 
     fun forEachActiveHost(
         update: (
-            ViewGroup,
+            IslandViewRegistry.HostToken,
             String,
             SharedPreferences,
             IslandSlotRuntimeConfig
@@ -241,7 +241,7 @@ internal object IslandContentUpdateCoordinator {
             ) return@forEach
             val prefs = HookEntry.instance?.prefs ?: return@forEach
             update(
-                token.root,
+                token,
                 packageName,
                 prefs,
                 IslandSlotRuntimeConfig.from(prefs)
@@ -341,14 +341,14 @@ internal object IslandContentUpdateCoordinator {
     ) {
         if (mode == RootConstants.ISLAND_CONTENT_MODE_NONE) return
         val slotView = view.findViewWithTag<View>(tag) ?: return
-        SlotContentCoordinator.configureView(
+        val styleChanged = SlotContentCoordinator.configureView(
             view = slotView,
             prefs = prefs,
             config = config,
             mode = mode,
             mediaInfo = mediaInfo
         )
-        IslandDynamicWidthCoordinator.requestRefresh(view)
+        if (styleChanged) IslandDynamicWidthCoordinator.requestRefresh(view)
     }
 
     /**
@@ -375,18 +375,10 @@ internal object IslandContentUpdateCoordinator {
                     )
         if (!usesCoverPalette) return
 
-        val rawAlbumArt = mediaInfo.albumArt
-        val previousArtworkRevision = CoverColorHelper.currentArtworkRequest()?.revision
-        val artworkRequest = CoverColorHelper.ensureArtworkColors(mediaInfo)
-        rawAlbumArt?.takeUnless { it.isRecycled } ?: run {
-            if (previousArtworkRevision != null &&
-                CoverColorHelper.currentArtworkRequest() == null
-            ) {
-                IslandMusicWaveEffects.refresh()
-            }
-            return
-        }
-        if (artworkRequest != null && artworkRequest.revision != previousArtworkRevision) {
+        val colorSession = CoverColorHelper.currentSession(mediaInfo) ?: return
+        val previousColorRevision = CoverColorHelper.cachedColorsRevision(colorSession)
+        CoverColorHelper.ensureArtworkColors(mediaInfo)
+        if (previousColorRevision != null && CoverColorHelper.cachedColorsRevision(colorSession) == null) {
             IslandMusicWaveEffects.refresh()
         }
     }

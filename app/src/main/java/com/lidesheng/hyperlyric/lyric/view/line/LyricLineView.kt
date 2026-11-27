@@ -56,7 +56,8 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
         setFadingEdgeLength(10.dp)
     }
 
-    val textPaint: TextPaint = TextPaintX().apply { textSize = 24f.sp }
+    private val linePaint = TextPaintX().apply { textSize = 24f.sp }
+    val textPaint: TextPaint get() = linePaint
     private val drawingClipBounds = Rect()
 
     val model: LyricModel get() = _model
@@ -395,7 +396,7 @@ open class LyricLineView(context: Context, attrs: AttributeSet? = null) :
         this.rightIfPossible = right
         updateColor(text.color, highlight.background, highlight.foreground)
         setTextSize(text.size)
-        textPaint.applyFont(text.typeface, text.fontVariationSettings)
+        linePaint.applyFont(text.typeface, text.fontVariationSettings)
         syncRenderer.setFont(text.typeface, text.fontVariationSettings)
         syncRenderer.isGradientEnabled = gradient
         countdownRenderer.isGradientEnabled = gradient

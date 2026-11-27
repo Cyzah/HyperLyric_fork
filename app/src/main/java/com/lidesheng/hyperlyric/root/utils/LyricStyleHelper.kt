@@ -1,9 +1,7 @@
 package com.lidesheng.hyperlyric.root.utils
 
 import android.content.SharedPreferences
-import android.content.res.Resources
 import android.graphics.Color
-import android.util.TypedValue
 import com.lidesheng.hyperlyric.common.RootConstants
 import com.lidesheng.hyperlyric.common.LyricTextColorStylePolicy
 import com.lidesheng.hyperlyric.common.SyllablePreferencePolicy
@@ -25,22 +23,19 @@ import com.lidesheng.hyperlyric.lyric.view.line.WordRevealAnimation
 object LyricStyleHelper {
     private const val COVER_BACKGROUND_ALPHA = 165
 
+    internal data class Colors(val primary: IntArray, val highlight: Highlight)
+
     /**
      * 构建歌词样式对象
      */
-    fun buildStyle(
+    internal fun buildStyle(
         prefs: SharedPreferences,
-        res: Resources,
+        primarySizePx: Float,
         mode: Int,
-        colorSession: CoverColorHelper.ColorSession? = null,
-        artworkRequest: CoverColorHelper.ArtworkRequest? = null,
-        textColorOverride: Int? = null,
+        colors: Colors,
         lyricAlignmentOverride: Int? = null,
-        coverPaletteBackgroundIsDark: Boolean
     ): LyricViewStyle {
         val syllableSettings = SyllablePreferencePolicy.read(prefs)
-        val fontSize =
-            prefs.getInt(RootConstants.KEY_HOOK_TEXT_SIZE, RootConstants.DEFAULT_HOOK_TEXT_SIZE)
         val font = FontHelper.loadFont(prefs)
 
         val textSizeRatio = getFloatCompat(
@@ -52,11 +47,6 @@ object LyricStyleHelper {
             prefs,
             RootConstants.KEY_HOOK_MULTI_LINE_SCALE,
             RootConstants.DEFAULT_HOOK_MULTI_LINE_SCALE
-        )
-        val primarySizePx = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP,
-            fontSize.toFloat(),
-            res.displayMetrics
         )
 
         // 内容类型、可见性和优先级由 LyricContentDisplayPolicy 解析后交给 View；无内容时
@@ -144,72 +134,9 @@ object LyricStyleHelper {
             true
         }
 
-        val textColorStyle = LyricTextColorStylePolicy.read(prefs)
-        val useCoverColor = LyricTextColorStylePolicy.usesCoverColor(textColorStyle)
-        val useCoverGradient = LyricTextColorStylePolicy.usesCoverGradient(textColorStyle)
-
-        val primaryColors: IntArray
-        val bgColors: IntArray
-        val hlColors: IntArray
-
-        if (textColorOverride != null) {
-            primaryColors = intArrayOf(textColorOverride)
-            bgColors = intArrayOf(
-                Color.argb(
-                    128,
-                    Color.red(textColorOverride),
-                    Color.green(textColorOverride),
-                    Color.blue(textColorOverride)
-                )
-            )
-            hlColors = intArrayOf(textColorOverride)
-        } else if (useCoverColor) {
-            val palette = if (artworkRequest != null) {
-                CoverColorHelper.getCachedColors(useCoverGradient, artworkRequest)
-            } else {
-                colorSession?.let {
-                    CoverColorHelper.getCachedColors(useCoverGradient, it)
-                }
-            }
-            val coverColors = if (coverPaletteBackgroundIsDark) {
-                palette?.second
-            } else {
-                palette?.first
-            }
-            if (coverColors != null && coverColors.isNotEmpty()) {
-                val backgroundCoverColors = coverColors.map {
-                    Color.argb(
-                        COVER_BACKGROUND_ALPHA,
-                        Color.red(it),
-                        Color.green(it),
-                        Color.blue(it)
-                    )
-                }.toIntArray()
-                primaryColors = coverColors // 无逐字/标题 -> 封面颜色
-                bgColors = backgroundCoverColors // 未唱到 -> 半透明封面色
-                hlColors = coverColors       // 已唱到 -> 封面颜色
-            } else {
-                val fallbackColor = if (coverPaletteBackgroundIsDark) Color.WHITE else Color.BLACK
-                primaryColors = intArrayOf(fallbackColor)
-                bgColors = intArrayOf(
-                    Color.argb(
-                        128,
-                        Color.red(fallbackColor),
-                        Color.green(fallbackColor),
-                        Color.blue(fallbackColor)
-                    )
-                )
-                hlColors = intArrayOf(fallbackColor)
-            }
-        } else {
-            primaryColors = intArrayOf(Color.WHITE)
-            bgColors = intArrayOf(Color.argb(128, 255, 255, 255))
-            hlColors = intArrayOf(Color.WHITE)
-        }
-
         return LyricViewStyle(
             primary = TextLook(
-                color = primaryColors,
+                color = colors.primary,
                 size = primarySizePx,
                 typeface = font.typeface,
                 fontVariationSettings = font.variationSettings,
@@ -217,15 +144,12 @@ object LyricStyleHelper {
                 relativeHighlight = syllableSettings.relativeHighlight,
             ),
             secondary = TextLook(
-                color = if (secondarySlotVisible) primaryColors else intArrayOf(Color.TRANSPARENT),
+                color = if (secondarySlotVisible) colors.primary else intArrayOf(Color.TRANSPARENT),
                 size = if (secondarySlotVisible) primarySizePx * textSizeRatio else 0f,
                 typeface = font.typeface,
                 fontVariationSettings = font.variationSettings,
             ),
-            highlight = Highlight(
-                background = bgColors,
-                foreground = hlColors,
-            ),
+            highlight = colors.highlight,
             marquee = Marquee(
                 speed = if (isMarqueeEnabled) marqueeSpeed.toFloat() else 0f,
                 initialDelay = marqueeDelay,
@@ -309,5 +233,41 @@ object LyricStyleHelper {
             rightIfPossible = rightIfPossible,
         )
     }
+
+    internal fun resolveColors(
+        textColorStyle: Int,
+        colorSession: CoverColorHelper.ColorSession?,
+        textColorOverride: Int?,
+        coverPaletteBackgroundIsDark: Boolean,
+    ): Colors {
+        if (textColorOverride != null) return solidColors(textColorOverride)
+        if (!LyricTextColorStylePolicy.usesCoverColor(textColorStyle)) {
+            return solidColors(Color.WHITE)
+        }
+
+        val useGradient = LyricTextColorStylePolicy.usesCoverGradient(textColorStyle)
+        val palette = colorSession?.let { CoverColorHelper.getCachedColors(useGradient, it) }
+        val coverColors = if (coverPaletteBackgroundIsDark) palette?.second else palette?.first
+        if (coverColors == null || coverColors.isEmpty()) {
+            return solidColors(if (coverPaletteBackgroundIsDark) Color.WHITE else Color.BLACK)
+        }
+        return Colors(
+            primary = coverColors,
+            highlight = Highlight(
+                background = IntArray(coverColors.size) { index ->
+                    withAlpha(coverColors[index], COVER_BACKGROUND_ALPHA)
+                },
+                foreground = coverColors,
+            ),
+        )
+    }
+
+    private fun solidColors(color: Int): Colors {
+        val foreground = intArrayOf(color)
+        return Colors(foreground, Highlight(intArrayOf(withAlpha(color, 128)), foreground))
+    }
+
+    private fun withAlpha(color: Int, alpha: Int): Int =
+        Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
 }
 

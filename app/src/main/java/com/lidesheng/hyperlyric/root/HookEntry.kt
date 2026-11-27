@@ -42,6 +42,7 @@ import com.lidesheng.hyperlyric.root.source.SuperLyricSource
 import com.lidesheng.hyperlyric.root.statusbar.StatusBarLyricHooker
 import com.lidesheng.hyperlyric.root.statusbar.StatusBarLyricMiPlayLauncher
 import com.lidesheng.hyperlyric.root.statusbar.StatusBarLyricRenderer
+import com.lidesheng.hyperlyric.root.utils.CoverColorHelper
 import com.lidesheng.hyperlyric.root.utils.HookLogger
 import io.github.libxposed.api.XposedInterface.Chain
 import io.github.libxposed.api.XposedInterface.Hooker
@@ -570,6 +571,15 @@ class HookEntry : XposedModule() {
         try {
             cleanupRuntime()
             runtimeApp = app
+            CoverColorHelper.setOnArtworkColorsReady { request, mediaInfo ->
+                val currentMedia = LyriconDataBridge.currentResolvedMediaInfo
+                if (instance === this && runtimeApp === app &&
+                    CoverColorHelper.isCurrentArtwork(request) &&
+                    (currentMedia == null || currentMedia.identity.isCompatibleWith(mediaInfo.identity))
+                ) {
+                    SystemUiLyricRenderer.onArtworkColorsReady(mediaInfo)
+                }
+            }
 
             LyriconDataBridge.updateLongInterludeCountdownEnabled(
                 prefs.getBoolean(
@@ -894,6 +904,7 @@ class HookEntry : XposedModule() {
     }
 
     private fun cleanupRuntime(): Boolean {
+        CoverColorHelper.setOnArtworkColorsReady(null)
         var succeeded = true
         val manager = sourceManager
         manager?.let {

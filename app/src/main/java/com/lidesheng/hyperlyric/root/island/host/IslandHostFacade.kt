@@ -94,6 +94,16 @@ internal object IslandHostFacade {
         HookIslandGlow.updateMusicGlow(rootView, prefs)
     }
 
+    internal fun applyReadyArtworkGlow(
+        rootView: ViewGroup,
+        packageName: String,
+        mediaInfo: MediaMetadataHelper.MediaInfo,
+        prefs: SharedPreferences
+    ) {
+        HookIslandGlow.refreshArtworkGlow(rootView, mediaInfo, prefs)
+        updateProgressGlow(rootView, packageName, mediaInfo, prefs)
+    }
+
     fun updateProgressGlow(
         rootView: ViewGroup,
         packageName: String,

@@ -300,7 +300,7 @@ internal class StatusBarLyricHost(
         updateVisibility(wrapper, lyrics)
     }
 
-    fun refreshTextStyle(prefs: SharedPreferences, forceStyle: Boolean = true) {
+    fun refreshTextColors(prefs: SharedPreferences, artworkMedia: MediaMetadataHelper.MediaInfo? = null) {
         val root = rootReference.get() ?: return
         val lyrics = lyricView ?: return
         if (lyrics.parent == null) return
@@ -312,17 +312,19 @@ internal class StatusBarLyricHost(
             lyricAlignment = RootConstants.CONTENT_ALIGNMENT_LEFT,
             textColorStyle = StatusBarLyricPreferences.effectiveStatusBarTextColorStyle(lyricPrefs),
         )
-        SlotContentCoordinator.configureView(
+        val styleChanged = SlotContentCoordinator.configureView(
             view = lyrics,
             prefs = lyricPrefs,
             config = config,
             mode = contentMode,
-            force = forceStyle,
+            mediaInfo = artworkMedia ?: SlotContentCoordinator.currentMediaInfo(lyrics.context),
             coverPaletteBackgroundIsDark = StatusBarTextColorHooker.currentBackgroundIsDark(),
         )
         updateIconTint(lyrics)
-        refreshIslandWidth()
-        if (forceStyle) root.requestLayout()
+        if (styleChanged) {
+            refreshIslandWidth()
+            root.requestLayout()
+        }
     }
 
     fun updatePlaybackPosition(

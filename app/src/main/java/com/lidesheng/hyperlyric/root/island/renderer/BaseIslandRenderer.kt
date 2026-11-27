@@ -1,10 +1,12 @@
 package com.lidesheng.hyperlyric.root.island.renderer
 
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import com.lidesheng.hyperlyric.common.LyricTypePreference
 import com.lidesheng.hyperlyric.common.RootConstants
+import com.lidesheng.hyperlyric.common.media.MediaMetadataHelper
 import com.lidesheng.hyperlyric.root.HookEntry
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
 import com.lidesheng.hyperlyric.root.island.config.IslandSlotRuntimeConfig
@@ -15,6 +17,8 @@ import com.lidesheng.hyperlyric.root.island.host.IslandViewRegistry
 import com.lidesheng.hyperlyric.root.island.presentation.IslandPresentationCoordinator
 import com.lidesheng.hyperlyric.root.island.presentation.IslandReconcileReason
 import com.lidesheng.hyperlyric.root.island.view.IslandLyricViewController
+import com.lidesheng.hyperlyric.root.media.CurrentMediaInfoResolver
+import com.lidesheng.hyperlyric.root.utils.HookLogger
 import java.util.concurrent.atomic.AtomicLong
 import com.lidesheng.hyperlyric.root.presentation.LyricPresentationScheduler
 
@@ -34,6 +38,21 @@ object BaseIslandRenderer : LyricRenderer {
     private val textColorRefreshRunnable = Runnable { performUpdateTextColors() }
     private val positionDispatchGeneration = AtomicLong(0L)
     private val contentDispatchGeneration = AtomicLong(0L)
+    private val mediaDispatchGeneration = AtomicLong(0L)
+
+    private data class ResumedContent(
+        val presentationRevision: Long,
+        val lyricVersion: Int,
+        val contentGeneration: Long,
+        val mediaGeneration: Long,
+        val mediaInfo: MediaMetadataHelper.MediaInfo,
+        val config: IslandSlotRuntimeConfig,
+        val leftSlot: View?,
+        val rightSlot: View?,
+    )
+
+    // Host generations are unique to one registration. The delayed pass consumes this on main.
+    private val resumedContentByHost = mutableMapOf<Long, ResumedContent>()
 
     /**
      * Source lifecycle events are the authority for lyric rendering state.
@@ -60,6 +79,8 @@ object BaseIslandRenderer : LyricRenderer {
     }
 
     private fun performRefreshActiveIsland() {
+        val resumed = resumedContentByHost.toMap()
+        resumedContentByHost.clear()
         val prefs = HookEntry.instance?.prefs ?: return
         if (!LyricTypePreference.isEnabled(prefs, RootConstants.LYRIC_TYPE_SUPER_ISLAND)) {
             clearAllViews()
@@ -74,8 +95,8 @@ object BaseIslandRenderer : LyricRenderer {
             LyriconDataBridge.currentLyricPackageName?.takeIf { it.isNotEmpty() } ?: return
         val lyricVersion = LyriconDataBridge.versionCounter.get()
         val presentationRevision = IslandPresentationCoordinator.currentPresentationRevision()
+        var mediaInfo: MediaMetadataHelper.MediaInfo? = null
 
-        IslandContentUpdateCoordinator.invalidate()
         IslandPresentationCoordinator.snapshotAttachedHosts(lyricPackage).forEach { token ->
             if (!isDispatchCurrent(token, lyricPackage, lyricVersion, presentationRevision)) {
                 return@forEach
@@ -88,18 +109,29 @@ object BaseIslandRenderer : LyricRenderer {
             if (!result.isTarget) return@forEach
 
             val currentPrefs = HookEntry.instance?.prefs ?: return@forEach
+            val config = IslandSlotRuntimeConfig.from(currentPrefs)
+            val resolvedMedia = mediaInfo ?: CurrentMediaInfoResolver.getMediaInfo(
+                token.root.context, lyricPackage, HookLogger
+            ).also { mediaInfo = it }
+            val previous = resumed[token.generation]
+            if (previous != null && !result.mutation.layoutMayHaveChanged &&
+                previous == snapshotContent(token, config, presentationRevision, lyricVersion, resolvedMedia)
+            ) return@forEach
+
             IslandContentUpdateCoordinator.updateContentForView(
                 view = token.root,
                 packageName = lyricPackage,
                 prefs = currentPrefs,
-                config = IslandSlotRuntimeConfig.from(currentPrefs),
+                config = config,
                 playbackActive = IslandPresentationCoordinator.isPlaybackActive(),
-                hostKind = token.kind
+                hostKind = token.kind,
+                mediaInfo = resolvedMedia,
             )
         }
     }
 
     override fun updateMetadata() {
+        mediaDispatchGeneration.incrementAndGet()
         // A metadata-only source event can change presentation eligibility, not just the
         // contents of a music-information slot. Reconcile the host first so the default mode
         // restores native content and the opt-in mode can create its lyric-side placeholder.
@@ -208,18 +240,31 @@ object BaseIslandRenderer : LyricRenderer {
     }
 
     override fun updateTextColors() {
+        mediaDispatchGeneration.incrementAndGet()
         mainHandler.removeCallbacks(textColorRefreshRunnable)
         mainHandler.post(textColorRefreshRunnable)
     }
 
-    private fun performUpdateTextColors() {
-        IslandContentUpdateCoordinator.forEachActiveHost { view, packageName, prefs, config ->
+    internal fun onArtworkColorsReady(mediaInfo: MediaMetadataHelper.MediaInfo) {
+        mediaDispatchGeneration.incrementAndGet()
+        performUpdateTextColors(mediaInfo)
+    }
+
+    private fun performUpdateTextColors(artworkMedia: MediaMetadataHelper.MediaInfo? = null) {
+        IslandContentUpdateCoordinator.forEachActiveHost { token, packageName, prefs, config ->
+            if (artworkMedia != null && artworkMedia.identity.packageName != packageName) {
+                return@forEachActiveHost
+            }
             IslandContentUpdateCoordinator.updateTextColorsForView(
-                view = view,
+                view = token.root,
                 packageName = packageName,
                 prefs = prefs,
-                config = config
+                config = config,
+                artworkMedia = artworkMedia,
             )
+            if (artworkMedia != null && token.kind == IslandViewRegistry.HostKind.REAL) {
+                IslandHostFacade.applyReadyArtworkGlow(token.root, packageName, artworkMedia, prefs)
+            }
         }
     }
 
@@ -294,10 +339,59 @@ object BaseIslandRenderer : LyricRenderer {
         positionDispatchGeneration.incrementAndGet()
         IslandPlaybackStateCoordinator.onPlaybackStateChanged(
             isPlaying = isPlaying,
-            onRefreshRequested = { refreshActiveIsland() },
+            updateResumedHost = ::updateResumedHost,
+            onRefreshRequested = {
+                if (!mainHandler.hasCallbacks(refreshRunnable)) refreshActiveIsland()
+            },
             onClearRequested = { clearAllViews() }
         )
     }
+
+    private fun updateResumedHost(
+        token: IslandViewRegistry.HostToken,
+        prefs: SharedPreferences,
+        config: IslandSlotRuntimeConfig,
+    ) {
+        val mediaInfo = CurrentMediaInfoResolver.getMediaInfo(token.root.context, token.packageName, HookLogger)
+        val snapshot = if (mainHandler.hasCallbacks(refreshRunnable)) {
+            snapshotContent(
+                token,
+                config,
+                IslandPresentationCoordinator.currentPresentationRevision(),
+                LyriconDataBridge.versionCounter.get(),
+                mediaInfo,
+            )
+        } else {
+            null
+        }
+        IslandContentUpdateCoordinator.updateContentForView(
+            view = token.root,
+            packageName = token.packageName,
+            prefs = prefs,
+            config = config,
+            playbackActive = true,
+            hostKind = token.kind,
+            mediaInfo = mediaInfo,
+        )
+        if (snapshot != null) resumedContentByHost[token.generation] = snapshot
+    }
+
+    private fun snapshotContent(
+        token: IslandViewRegistry.HostToken,
+        config: IslandSlotRuntimeConfig,
+        presentationRevision: Long,
+        lyricVersion: Int,
+        mediaInfo: MediaMetadataHelper.MediaInfo,
+    ): ResumedContent = ResumedContent(
+        presentationRevision = presentationRevision,
+        lyricVersion = lyricVersion,
+        contentGeneration = contentDispatchGeneration.get(),
+        mediaGeneration = mediaDispatchGeneration.get(),
+        mediaInfo = mediaInfo,
+        config = config,
+        leftSlot = token.root.findViewWithTag(IslandProbeUtils.LEFT_TEST_VIEW_TAG),
+        rightSlot = token.root.findViewWithTag(IslandProbeUtils.RIGHT_TEST_VIEW_TAG),
+    )
 
     override fun clearAllViews() {
         if (Looper.myLooper() != Looper.getMainLooper()) {
@@ -309,6 +403,7 @@ object BaseIslandRenderer : LyricRenderer {
         mainHandler.removeCallbacks(textColorRefreshRunnable)
         positionDispatchGeneration.incrementAndGet()
         contentDispatchGeneration.incrementAndGet()
+        resumedContentByHost.clear()
 
         val wasPlaybackActive = IslandPresentationCoordinator.isPlaybackActive()
         if (wasPlaybackActive) {
@@ -339,6 +434,7 @@ object BaseIslandRenderer : LyricRenderer {
         mainHandler.removeCallbacks(textColorRefreshRunnable)
         positionDispatchGeneration.incrementAndGet()
         contentDispatchGeneration.incrementAndGet()
+        resumedContentByHost.clear()
     }
 
     private fun isDispatchCurrent(

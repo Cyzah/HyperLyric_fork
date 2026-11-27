@@ -1,5 +1,6 @@
 package com.lidesheng.hyperlyric.root.island.renderer
 
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import com.lidesheng.hyperlyric.common.LyricTypePreference
@@ -8,6 +9,7 @@ import com.lidesheng.hyperlyric.root.HookEntry
 import com.lidesheng.hyperlyric.root.LyriconDataBridge
 import com.lidesheng.hyperlyric.root.island.config.IslandSlotRuntimeConfig
 import com.lidesheng.hyperlyric.root.island.effects.glow.IslandProgressGlowController
+import com.lidesheng.hyperlyric.root.island.host.IslandViewRegistry
 import com.lidesheng.hyperlyric.root.island.presentation.IslandPresentationCoordinator
 import com.lidesheng.hyperlyric.root.island.presentation.IslandReconcileReason
 import com.lidesheng.hyperlyric.root.island.view.IslandLyricViewController
@@ -25,12 +27,13 @@ internal object IslandPlaybackStateCoordinator {
 
     fun onPlaybackStateChanged(
         isPlaying: Boolean,
+        updateResumedHost: (IslandViewRegistry.HostToken, SharedPreferences, IslandSlotRuntimeConfig) -> Unit,
         onRefreshRequested: () -> Unit,
         onClearRequested: () -> Unit
     ) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post {
-                onPlaybackStateChanged(isPlaying, onRefreshRequested, onClearRequested)
+                onPlaybackStateChanged(isPlaying, updateResumedHost, onRefreshRequested, onClearRequested)
             }
             return
         }
@@ -63,7 +66,7 @@ internal object IslandPlaybackStateCoordinator {
         when {
             isPlaying && clearedByPause -> {
                 clearedByPause = false
-                restoreActiveViewsAfterPause(onRefreshRequested)
+                restoreActiveViewsAfterPause(updateResumedHost, onRefreshRequested)
             }
 
             isPlaying && (stateChanged || clockChanged) -> applyPlaybackStateToActiveViews(true)
@@ -93,7 +96,10 @@ internal object IslandPlaybackStateCoordinator {
         }
     }
 
-    private fun restoreActiveViewsAfterPause(onRefreshRequested: () -> Unit) {
+    private fun restoreActiveViewsAfterPause(
+        updateResumedHost: (IslandViewRegistry.HostToken, SharedPreferences, IslandSlotRuntimeConfig) -> Unit,
+        onRefreshRequested: () -> Unit,
+    ) {
         val lyricPackage = LyriconDataBridge.currentLyricPackageName
             ?.takeIf { it.isNotEmpty() }
             ?: return
@@ -112,6 +118,7 @@ internal object IslandPlaybackStateCoordinator {
             return
         }
 
+        var needsRefresh = false
         hosts.forEach { token ->
             if (!IslandPresentationCoordinator.shouldRenderInjectedIsland() ||
                 !IslandPresentationCoordinator.isCurrentHost(token) ||
@@ -133,19 +140,13 @@ internal object IslandPlaybackStateCoordinator {
                 config.leftMode != RootConstants.ISLAND_CONTENT_MODE_NONE ||
                         config.rightMode != RootConstants.ISLAND_CONTENT_MODE_NONE
             if (expectsInjectedView && result.mutation.injectedSlotsPresent == false) {
-                onRefreshRequested()
+                needsRefresh = true
                 return@forEach
             }
 
-            IslandContentUpdateCoordinator.updateContentForView(
-                view = token.root,
-                packageName = lyricPackage,
-                prefs = currentPrefs,
-                config = config,
-                playbackActive = true,
-                hostKind = token.kind
-            )
+            updateResumedHost(token, currentPrefs, config)
         }
+        if (needsRefresh) onRefreshRequested()
     }
 
     fun clearActiveViewsForPause() {

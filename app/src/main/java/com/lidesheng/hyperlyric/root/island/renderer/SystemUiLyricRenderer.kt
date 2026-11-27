@@ -1,5 +1,8 @@
 package com.lidesheng.hyperlyric.root.island.renderer
 
+import com.lidesheng.hyperlyric.common.media.MediaMetadataHelper
+import com.lidesheng.hyperlyric.root.island.effects.IslandMusicWaveEffects
+
 import com.lidesheng.hyperlyric.root.statusbar.StatusBarLyricRenderer
 
 /** Sends the same source events to the Super Island and status-bar lyric projections. */
@@ -22,6 +25,12 @@ internal object SystemUiLyricRenderer : LyricRenderer {
     override fun updateTextColors() {
         BaseIslandRenderer.updateTextColors()
         StatusBarLyricRenderer.updateTextColors()
+    }
+
+    internal fun onArtworkColorsReady(mediaInfo: MediaMetadataHelper.MediaInfo) {
+        BaseIslandRenderer.onArtworkColorsReady(mediaInfo)
+        StatusBarLyricRenderer.updateTextColors(mediaInfo)
+        IslandMusicWaveEffects.refresh()
     }
 
     override fun updatePosition(position: Long, playbackSpeed: Float) {
